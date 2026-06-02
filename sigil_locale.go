@@ -59,7 +59,7 @@ var sigilCN = map[string]string{
 	"Greater Aegis V+":              "生命上限 V+",
 	"Auto Potion":                   "自动复活",
 	"Seven-Star Boundary+":          "涯之七星+",
-	"Two-Crown Boundary+":           "王之二涯+",
+	"Two-Crown Boundary+":           "涯之二王+",
 	"Ain+":                          "无态+",
 	"Berserker Echo+":               "狂战士+",
 	"Spartan Echo+":                 "斯巴达+",

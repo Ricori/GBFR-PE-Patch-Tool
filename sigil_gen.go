@@ -659,7 +659,10 @@ func (sg *SigilGen) GetExistingSigils() ([]ExistingSigil, error) {
 
 		es := ExistingSigil{GemUnitID: gemUnitID, SigilName: fmt.Sprintf("0x%08X", u.Uint32())}
 
-		if sigil := sg.catalog.LookupSigilByHash(u.Uint32()); sigil != nil {
+		hash := u.Uint32()
+		if name := ctName(hash); name != "" {
+			es.SigilName = name
+		} else if sigil := sg.catalog.LookupSigilByHash(hash); sigil != nil {
 			es.SigilName = cnName(sigil.DisplayName)
 		}
 
@@ -668,7 +671,10 @@ func (sg *SigilGen) GetExistingSigils() ([]ExistingSigil, error) {
 		}
 
 		if pt, ok := sg.save.findUnit(TraitHashIDType, primaryTraitUnit); ok {
-			if trait := sg.catalog.LookupTraitByHash(pt.Uint32()); trait != nil {
+			ph := pt.Uint32()
+			if name := ctName(ph); name != "" {
+				es.PrimaryTraitName = name
+			} else if trait := sg.catalog.LookupTraitByHash(ph); trait != nil {
 				es.PrimaryTraitName = cnTrait(trait.DisplayName)
 			}
 		}
@@ -679,7 +685,9 @@ func (sg *SigilGen) GetExistingSigils() ([]ExistingSigil, error) {
 		if st, ok := sg.save.findUnit(TraitHashIDType, secondaryTraitUnit); ok {
 			sh := st.Uint32()
 			if sh != EmptyHash {
-				if trait := sg.catalog.LookupTraitByHash(sh); trait != nil {
+				if name := ctName(sh); name != "" {
+					es.SecondaryTraitName = name
+				} else if trait := sg.catalog.LookupTraitByHash(sh); trait != nil {
 					es.SecondaryTraitName = cnTrait(trait.DisplayName)
 				} else {
 					es.SecondaryTraitName = fmt.Sprintf("0x%08X", sh)
