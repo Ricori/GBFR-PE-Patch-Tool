@@ -2,7 +2,8 @@
 import { reactive, ref } from 'vue'
 import { CharaAttach, CharaDetach,
          CountdownGetStatus, CountdownScan, CountdownSet,
-         FaceAccessoryGetStatus, FaceAccessoryScan, FaceAccessorySetHidden } from '../../wailsjs/go/main/App'
+         FaceAccessoryGetStatus, FaceAccessoryScan, FaceAccessorySetHidden,
+         GetAppVersion, CheckUpdate, OpenReleasePage } from '../../wailsjs/go/main/App'
 
 const emit = defineEmits(['status'])
 
@@ -15,6 +16,10 @@ const countdownStatus = reactive({ found: false, address: 0, rva: 0, value1: 0, 
 const countdownLoading = ref(false)
 const faceAccessoryStatus = reactive({ found: false, address: 0, rva: 0, hidden: false, jumpOpcode: '', currentBytes: '' })
 const faceAccessoryLoading = ref(false)
+const updateInfo = reactive({ currentVersion: 'v1.5.0', latestVersion: '', hasUpdate: false, releaseUrl: '', body: '', assets: [] })
+const updateLoading = ref(false)
+
+GetAppVersion().then(v => { updateInfo.currentVersion = v }).catch(() => {})
 
 function connect() {
   loading.value = true
@@ -114,6 +119,22 @@ function setFaceAccessoryHidden(hidden) {
     .catch((err) => emit('status', String(err), 'error'))
     .finally(() => { faceAccessoryLoading.value = false })
 }
+
+function checkUpdate() {
+  updateLoading.value = true
+  CheckUpdate()
+    .then((info) => {
+      Object.assign(updateInfo, info)
+      emit('status', info.hasUpdate ? `发现新版本 ${info.latestVersion}` : '当前已是最新版本', info.hasUpdate ? 'success' : 'success')
+    })
+    .catch((err) => emit('status', String(err), 'error'))
+    .finally(() => { updateLoading.value = false })
+}
+
+function openReleasePage() {
+  OpenReleasePage(updateInfo.releaseUrl || '')
+    .catch((err) => emit('status', String(err), 'error'))
+}
 </script>
 
 <template>
@@ -130,6 +151,23 @@ function setFaceAccessoryHidden(hidden) {
         </button>
         <button v-else class="btn-disconnect" @click="disconnect">断开连接</button>
         <span v-if="connected" class="pid">PID: {{ info.pid }}</span>
+      </div>
+
+      <div class="memory-card">
+        <div class="memory-header">
+          <span class="memory-title">检查更新</span>
+          <span class="memory-hint">当前版本 {{ updateInfo.currentVersion }}</span>
+        </div>
+        <div class="memory-info">
+          <span>最新版本: {{ updateInfo.latestVersion || '未检查' }}</span>
+          <span v-if="updateInfo.hasUpdate" class="update-new">有新版本</span>
+          <span v-else-if="updateInfo.latestVersion">已是最新</span>
+        </div>
+        <div v-if="updateInfo.body" class="update-body">{{ updateInfo.body }}</div>
+        <div class="memory-row">
+          <button class="btn-batch" @click="checkUpdate" :disabled="updateLoading">{{ updateLoading ? '检查中...' : '检查更新' }}</button>
+          <button class="btn-refresh" @click="openReleasePage">打开 Release 页面</button>
+        </div>
       </div>
 
       <template v-if="connected">
@@ -214,6 +252,8 @@ function setFaceAccessoryHidden(hidden) {
 .memory-title { font-size:0.8rem; font-weight:600; color:rgba(255,255,255,0.62); }
 .memory-hint, .memory-info { font-size:0.68rem; color:rgba(255,255,255,0.32); }
 .memory-bytes { font-size:0.66rem; color:rgba(255,255,255,0.24); font-family:'Courier New',monospace; word-break:break-all; }
+.update-new { color:#4ade80; }
+.update-body { max-height:86px; overflow-y:auto; padding:8px 10px; border-radius:8px; background:rgba(255,255,255,0.03); color:rgba(255,255,255,0.36); font-size:0.7rem; line-height:1.45; white-space:pre-wrap; scrollbar-width:thin; scrollbar-color:rgba(255,255,255,0.12) transparent; }
 .batch-input {
   width:80px; padding:6px 10px; border-radius:6px; border:1px solid rgba(255,255,255,0.15);
   background:rgba(255,255,255,0.07); color:#fff; font-size:0.82rem; outline:none;

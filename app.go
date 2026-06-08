@@ -3,13 +3,18 @@ package main
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 	"unsafe"
 
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )
@@ -18,6 +23,9 @@ const (
 	steamAppID  = "881020"
 	gameExeName = "granblue_fantasy_relink.exe"
 	gameFolder  = "Granblue Fantasy Relink"
+	appVersion  = "v1.5.0"
+	repoOwner   = "BitterG"
+	repoName    = "GBFR-PE-Patch-Tool"
 )
 
 // ── 补丁定义 ──
@@ -71,6 +79,20 @@ type StatusInfo struct {
 	Patches      []PatchStatus `json:"patches"`
 }
 
+type UpdateAsset struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+type UpdateInfo struct {
+	CurrentVersion string        `json:"currentVersion"`
+	LatestVersion  string        `json:"latestVersion"`
+	HasUpdate      bool          `json:"hasUpdate"`
+	ReleaseURL     string        `json:"releaseUrl"`
+	Body           string        `json:"body"`
+	Assets         []UpdateAsset `json:"assets"`
+}
+
 // ── App ──
 
 type App struct {
@@ -87,6 +109,93 @@ type App struct {
 func NewApp() *App { return &App{} }
 
 func (a *App) startup(ctx context.Context) { a.ctx = ctx }
+
+func (a *App) GetAppVersion() string {
+	return appVersion
+}
+
+func (a *App) CheckUpdate() (UpdateInfo, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", repoOwner, repoName)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return UpdateInfo{}, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", repoName+"/"+appVersion)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return UpdateInfo{}, fmt.Errorf("检查更新失败: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return UpdateInfo{}, fmt.Errorf("检查更新失败: GitHub 返回 %s", resp.Status)
+	}
+
+	var release struct {
+		TagName string `json:"tag_name"`
+		HTMLURL string `json:"html_url"`
+		Body    string `json:"body"`
+		Assets  []struct {
+			Name string `json:"name"`
+			URL  string `json:"browser_download_url"`
+		} `json:"assets"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return UpdateInfo{}, fmt.Errorf("解析更新信息失败: %w", err)
+	}
+
+	info := UpdateInfo{
+		CurrentVersion: appVersion,
+		LatestVersion:  release.TagName,
+		HasUpdate:      compareVersionTags(release.TagName, appVersion) > 0,
+		ReleaseURL:     release.HTMLURL,
+		Body:           release.Body,
+	}
+	for _, asset := range release.Assets {
+		info.Assets = append(info.Assets, UpdateAsset{Name: asset.Name, URL: asset.URL})
+	}
+	return info, nil
+}
+
+func (a *App) OpenReleasePage(url string) error {
+	if strings.TrimSpace(url) == "" {
+		url = fmt.Sprintf("https://github.com/%s/%s/releases", repoOwner, repoName)
+	}
+	runtime.BrowserOpenURL(a.ctx, url)
+	return nil
+}
+
+func compareVersionTags(a, b string) int {
+	ap := parseVersionTag(a)
+	bp := parseVersionTag(b)
+	for i := 0; i < len(ap); i++ {
+		if ap[i] > bp[i] {
+			return 1
+		}
+		if ap[i] < bp[i] {
+			return -1
+		}
+	}
+	return 0
+}
+
+func parseVersionTag(tag string) [3]int {
+	var parts [3]int
+	cleaned := strings.TrimPrefix(strings.TrimSpace(tag), "v")
+	fields := strings.Split(cleaned, ".")
+	for i := 0; i < len(parts) && i < len(fields); i++ {
+		text := fields[i]
+		if idx := strings.IndexAny(text, "-+"); idx >= 0 {
+			text = text[:idx]
+		}
+		if n, err := strconv.Atoi(text); err == nil {
+			parts[i] = n
+		}
+	}
+	return parts
+}
 
 // AutoDetect 自动扫描 Steam 安装路径
 func (a *App) AutoDetect() string {
