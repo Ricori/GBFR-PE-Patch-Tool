@@ -209,6 +209,33 @@ func (c *Catalog) RequireTrait(id string) (*TraitDef, error) {
 	return nil, fmt.Errorf("未知特性 ID: %s", id)
 }
 
+func isDraftSigilID(id string) bool {
+	parts := strings.Split(id, "_")
+	if len(parts) != 3 || strings.ToUpper(parts[0]) != "GEEN" {
+		return false
+	}
+	family, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return false
+	}
+	if family == 10 {
+		return true
+	}
+	if family >= 114 && family <= 132 {
+		suffix := parts[2]
+		return suffix == "04" || suffix == "54" || suffix == "64"
+	}
+	return false
+}
+
+func isDraftTraitID(id string) bool {
+	return strings.EqualFold(id, "SKILL_010_00")
+}
+
+func isSelectableTrait(trait *TraitDef) bool {
+	return trait != nil && !isDraftTraitID(trait.InternalID)
+}
+
 func (c *Catalog) GetAllowedSecondaryTraits(sigil *SigilDef) ([]*TraitDef, error) {
 	if sigil.SupportsSecondaryTrait == nil || !*sigil.SupportsSecondaryTrait {
 		return nil, nil
@@ -219,13 +246,13 @@ func (c *Catalog) GetAllowedSecondaryTraits(sigil *SigilDef) ([]*TraitDef, error
 		disallowed[id] = true
 	}
 
-	var result []*TraitDef
-	for _, id := range sigil.AllowedSecondaryTraitIDs {
-		if disallowed[id] {
+	result := make([]*TraitDef, 0, len(c.Traits))
+	for i := range c.Traits {
+		trait := &c.Traits[i]
+		if !isSelectableTrait(trait) {
 			continue
 		}
-		trait, err := c.RequireTrait(id)
-		if err != nil {
+		if disallowed[trait.InternalID] {
 			continue
 		}
 		if trait.CanAppearAsSecondary != nil && !*trait.CanAppearAsSecondary {
@@ -326,9 +353,12 @@ func ParseHashHex(s string) (uint32, error) {
 
 // GetSigilSortedList returns sigils sorted by group then display name (matching C# sort order).
 func (c *Catalog) GetSigilSortedList() []*SigilDef {
-	sorted := make([]*SigilDef, len(c.Sigils))
+	sorted := make([]*SigilDef, 0, len(c.Sigils))
 	for i := range c.Sigils {
-		sorted[i] = &c.Sigils[i]
+		if isDraftSigilID(c.Sigils[i].InternalID) {
+			continue
+		}
+		sorted = append(sorted, &c.Sigils[i])
 	}
 	sort.Slice(sorted, func(i, j int) bool {
 		gi := sigilSortKey(sorted[i].InternalID)

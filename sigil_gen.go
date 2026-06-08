@@ -110,15 +110,18 @@ func (sg *SigilGen) GetTraitList() ([]TraitInfo, error) {
 			return nil, err
 		}
 	}
-	result := make([]TraitInfo, len(sg.catalog.Traits))
+	result := make([]TraitInfo, 0, len(sg.catalog.Traits))
 	for i, t := range sg.catalog.Traits {
-		result[i] = TraitInfo{
+		if !isSelectableTrait(&sg.catalog.Traits[i]) {
+			continue
+		}
+		result = append(result, TraitInfo{
 			InternalID:    t.InternalID,
 			Hash:          t.Hash,
 			DisplayName:   cnTrait(t.DisplayName),
 			MaxLevel:      derefInt(t.MaxLevel),
 			AllowedLevels: t.AllowedLevels,
-		}
+		})
 	}
 	return result, nil
 }
