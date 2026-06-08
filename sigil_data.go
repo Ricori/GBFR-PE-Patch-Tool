@@ -13,52 +13,52 @@ import (
 var dataFiles embed.FS
 
 type SigilDef struct {
-	InternalID                     string                         `json:"internalId"`
-	Hash                           string                         `json:"hash"`
-	DisplayName                    string                         `json:"displayName"`
-	Category                       *string                        `json:"category"`
-	IsPlusSigil                    *bool                          `json:"isPlusSigil"`
-	SupportsSecondaryTrait         *bool                          `json:"supportsSecondaryTrait"`
-	AllowedSigilLevels             []int                          `json:"allowedSigilLevels"`
-	DefaultSigilLevel              *int                           `json:"defaultSigilLevel"`
-	MaxSigilLevel                  *int                           `json:"maxSigilLevel"`
-	PrimaryTraitID                 string                         `json:"primaryTraitId"`
-	PrimaryTraitName               *string                        `json:"primaryTraitName"`
-	FirstTraitMaxLevel             *int                           `json:"firstTraitMaxLevel"`
-	AllowedFirstTraitLevels        []int                          `json:"allowedFirstTraitLevels"`
-	AllowedSecondaryTraitIDs       []string                       `json:"allowedSecondaryTraitIds"`
-	DisallowedSecondaryTraitIDs    []string                       `json:"disallowedSecondaryTraitIds"`
-	DefaultSecondaryTraitID        *string                        `json:"defaultSecondaryTraitId"`
-	DefaultSecondaryTraitName      *string                        `json:"defaultSecondaryTraitName"`
-	SecondaryTraitLevelOverrides   map[string]TraitLevelOverride  `json:"secondaryTraitLevelOverrides"`
+	InternalID                   string                        `json:"internalId"`
+	Hash                         string                        `json:"hash"`
+	DisplayName                  string                        `json:"displayName"`
+	Category                     *string                       `json:"category"`
+	IsPlusSigil                  *bool                         `json:"isPlusSigil"`
+	SupportsSecondaryTrait       *bool                         `json:"supportsSecondaryTrait"`
+	AllowedSigilLevels           []int                         `json:"allowedSigilLevels"`
+	DefaultSigilLevel            *int                          `json:"defaultSigilLevel"`
+	MaxSigilLevel                *int                          `json:"maxSigilLevel"`
+	PrimaryTraitID               string                        `json:"primaryTraitId"`
+	PrimaryTraitName             *string                       `json:"primaryTraitName"`
+	FirstTraitMaxLevel           *int                          `json:"firstTraitMaxLevel"`
+	AllowedFirstTraitLevels      []int                         `json:"allowedFirstTraitLevels"`
+	AllowedSecondaryTraitIDs     []string                      `json:"allowedSecondaryTraitIds"`
+	DisallowedSecondaryTraitIDs  []string                      `json:"disallowedSecondaryTraitIds"`
+	DefaultSecondaryTraitID      *string                       `json:"defaultSecondaryTraitId"`
+	DefaultSecondaryTraitName    *string                       `json:"defaultSecondaryTraitName"`
+	SecondaryTraitLevelOverrides map[string]TraitLevelOverride `json:"secondaryTraitLevelOverrides"`
 }
 
 type TraitDef struct {
-	InternalID                  string  `json:"internalId"`
-	Hash                        string  `json:"hash"`
-	DisplayName                 string  `json:"displayName"`
-	Category                    *string `json:"category"`
-	MaxLevel                    *int    `json:"maxLevel"`
-	AllowedLevels               []int   `json:"allowedLevels"`
-	ObservedLevels              []int   `json:"observedLevels"`
-	CanAppearAsPrimary          *bool   `json:"canAppearAsPrimary"`
-	CanAppearAsSecondary        *bool   `json:"canAppearAsSecondary"`
-	BannedAsSecondaryOnPlusSigils *bool `json:"bannedAsSecondaryOnPlusSigils"`
+	InternalID                    string  `json:"internalId"`
+	Hash                          string  `json:"hash"`
+	DisplayName                   string  `json:"displayName"`
+	Category                      *string `json:"category"`
+	MaxLevel                      *int    `json:"maxLevel"`
+	AllowedLevels                 []int   `json:"allowedLevels"`
+	ObservedLevels                []int   `json:"observedLevels"`
+	CanAppearAsPrimary            *bool   `json:"canAppearAsPrimary"`
+	CanAppearAsSecondary          *bool   `json:"canAppearAsSecondary"`
+	BannedAsSecondaryOnPlusSigils *bool   `json:"bannedAsSecondaryOnPlusSigils"`
 }
 
 type TraitLevelOverride struct {
-	MaxLevel      *int  `json:"maxLevel"`
-	AllowedLevels []int `json:"allowedLevels"`
+	MaxLevel       *int  `json:"maxLevel"`
+	AllowedLevels  []int `json:"allowedLevels"`
 	ObservedLevels []int `json:"observedLevels"`
 }
 
 type CompatibilityRule struct {
-	ID                    string  `json:"id"`
-	Type                  string  `json:"type"`
-	SigilID               *string `json:"sigilId"`
-	PrimaryTraitID        *string `json:"primaryTraitId"`
-	SecondaryTraitID      *string `json:"secondaryTraitId"`
-	AllowedSecondaryLevels []int  `json:"allowedSecondaryLevels"`
+	ID                     string  `json:"id"`
+	Type                   string  `json:"type"`
+	SigilID                *string `json:"sigilId"`
+	PrimaryTraitID         *string `json:"primaryTraitId"`
+	SecondaryTraitID       *string `json:"secondaryTraitId"`
+	AllowedSecondaryLevels []int   `json:"allowedSecondaryLevels"`
 }
 
 type RuleFile struct {
@@ -69,22 +69,26 @@ type Catalog struct {
 	Sigils      []SigilDef
 	Traits      []TraitDef
 	Rules       []CompatibilityRule
-	sigilByID    map[string]*SigilDef
-	traitByID    map[string]*TraitDef
-	sigilByHash  map[uint32]*SigilDef
-	traitByHash  map[uint32]*TraitDef
+	sigilByID   map[string]*SigilDef
+	traitByID   map[string]*TraitDef
+	sigilByHash map[uint32]*SigilDef
+	traitByHash map[uint32]*TraitDef
 }
 
 func LoadCatalog() (*Catalog, error) {
 	c := &Catalog{}
 
-	sigils, err := loadJSON[struct{ Sigils []SigilDef `json:"sigils"` }]("data/sigils.json")
+	sigils, err := loadJSON[struct {
+		Sigils []SigilDef `json:"sigils"`
+	}]("data/sigils.json")
 	if err != nil {
 		return nil, fmt.Errorf("加载因子数据失败: %w", err)
 	}
 	c.Sigils = sigils.Sigils
 
-	traits, err := loadJSON[struct{ Traits []TraitDef `json:"traits"` }]("data/traits.json")
+	traits, err := loadJSON[struct {
+		Traits []TraitDef `json:"traits"`
+	}]("data/traits.json")
 	if err != nil {
 		return nil, fmt.Errorf("加载特性数据失败: %w", err)
 	}
@@ -236,14 +240,50 @@ func isSelectableTrait(trait *TraitDef) bool {
 	return trait != nil && !isDraftTraitID(trait.InternalID)
 }
 
+func supportsGeneratedPlusSigil(sigil *SigilDef) bool {
+	if sigil == nil {
+		return false
+	}
+	if sigil.SupportsSecondaryTrait != nil && *sigil.SupportsSecondaryTrait {
+		return true
+	}
+	return strings.HasSuffix(sigil.DisplayName, " V") || strings.EqualFold(sigil.DisplayName, "Stout Heart")
+}
+
+func generatedPlusDisplayName(name string) string {
+	if strings.HasSuffix(name, "+") {
+		return name
+	}
+	if strings.HasSuffix(name, " V") {
+		return name + "+"
+	}
+	return name + " V+"
+}
+
+func displaySigilName(sigil *SigilDef) string {
+	if sigil == nil {
+		return ""
+	}
+	if supportsGeneratedPlusSigil(sigil) {
+		if sigil.SupportsSecondaryTrait != nil && *sigil.SupportsSecondaryTrait {
+			return cnName(sigil.DisplayName)
+		}
+		return cnName(sigil.DisplayName) + "+"
+	}
+	return cnName(sigil.DisplayName)
+}
+
 func (c *Catalog) GetAllowedSecondaryTraits(sigil *SigilDef) ([]*TraitDef, error) {
-	if sigil.SupportsSecondaryTrait == nil || !*sigil.SupportsSecondaryTrait {
+	if !supportsGeneratedPlusSigil(sigil) {
 		return nil, nil
 	}
 
 	disallowed := make(map[string]bool)
 	for _, id := range sigil.DisallowedSecondaryTraitIDs {
 		disallowed[id] = true
+	}
+	if sigil.PrimaryTraitID != "" {
+		disallowed[sigil.PrimaryTraitID] = true
 	}
 
 	result := make([]*TraitDef, 0, len(c.Traits))

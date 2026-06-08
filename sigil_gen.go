@@ -9,30 +9,30 @@ import (
 // ── 前端交互数据结构 ──
 
 type SigilInfo struct {
-	InternalID             string   `json:"internalId"`
-	Hash                   string   `json:"hash"`
-	DisplayName            string   `json:"displayName"`
-	SupportsSecondaryTrait bool     `json:"supportsSecondaryTrait"`
-	AllowedSigilLevels     []int    `json:"allowedSigilLevels"`
-	DefaultSigilLevel      int      `json:"defaultSigilLevel"`
-	PrimaryTraitID         string   `json:"primaryTraitId"`
-	PrimaryTraitName       string   `json:"primaryTraitName"`
-	AllowedFirstTraitLevels []int   `json:"allowedFirstTraitLevels"`
-	FirstTraitMaxLevel     int      `json:"firstTraitMaxLevel"`
+	InternalID              string `json:"internalId"`
+	Hash                    string `json:"hash"`
+	DisplayName             string `json:"displayName"`
+	SupportsSecondaryTrait  bool   `json:"supportsSecondaryTrait"`
+	AllowedSigilLevels      []int  `json:"allowedSigilLevels"`
+	DefaultSigilLevel       int    `json:"defaultSigilLevel"`
+	PrimaryTraitID          string `json:"primaryTraitId"`
+	PrimaryTraitName        string `json:"primaryTraitName"`
+	AllowedFirstTraitLevels []int  `json:"allowedFirstTraitLevels"`
+	FirstTraitMaxLevel      int    `json:"firstTraitMaxLevel"`
 }
 
 type TraitInfo struct {
-	InternalID   string `json:"internalId"`
-	Hash         string `json:"hash"`
-	DisplayName  string `json:"displayName"`
-	MaxLevel     int    `json:"maxLevel"`
+	InternalID    string `json:"internalId"`
+	Hash          string `json:"hash"`
+	DisplayName   string `json:"displayName"`
+	MaxLevel      int    `json:"maxLevel"`
 	AllowedLevels []int  `json:"allowedLevels"`
 }
 
 type SaveInfo struct {
-	Path         string `json:"path"`
-	OccupiedSigils int  `json:"occupiedSigils"`
-	MaxSlotID    int    `json:"maxSlotId"`
+	Path           string `json:"path"`
+	OccupiedSigils int    `json:"occupiedSigils"`
+	MaxSlotID      int    `json:"maxSlotId"`
 }
 
 type QueueItem struct {
@@ -49,9 +49,9 @@ type QueueItem struct {
 }
 
 type ApplyResult struct {
-	CreatedCount int    `json:"createdCount"`
-	VerifiedCount int   `json:"verifiedCount"`
-	OutputPath   string `json:"outputPath"`
+	CreatedCount  int    `json:"createdCount"`
+	VerifiedCount int    `json:"verifiedCount"`
+	OutputPath    string `json:"outputPath"`
 }
 
 // ── SigilGen 主体 ──
@@ -90,8 +90,8 @@ func (sg *SigilGen) GetSigilList() ([]SigilInfo, error) {
 		result[i] = SigilInfo{
 			InternalID:              s.InternalID,
 			Hash:                    s.Hash,
-			DisplayName:             cnName(s.DisplayName),
-			SupportsSecondaryTrait:  s.SupportsSecondaryTrait != nil && *s.SupportsSecondaryTrait,
+			DisplayName:             displaySigilName(s),
+			SupportsSecondaryTrait:  supportsGeneratedPlusSigil(s),
 			AllowedSigilLevels:      s.AllowedSigilLevels,
 			DefaultSigilLevel:       derefInt(s.DefaultSigilLevel),
 			PrimaryTraitID:          s.PrimaryTraitID,
@@ -301,7 +301,7 @@ func (sg *SigilGen) AddToQueue(item QueueItem) error {
 	if err != nil {
 		return err
 	}
-	item.SigilName = cnName(sigil.DisplayName)
+	item.SigilName = displaySigilName(sigil)
 
 	// 验证因子等级
 	levels, err := sg.catalog.RequireSigilLevels(sigil)
@@ -329,7 +329,7 @@ func (sg *SigilGen) AddToQueue(item QueueItem) error {
 	}
 
 	// 验证副特性
-	supports := sigil.SupportsSecondaryTrait != nil && *sigil.SupportsSecondaryTrait
+	supports := supportsGeneratedPlusSigil(sigil)
 	if supports {
 		if item.SecondaryTraitID == "" {
 			return fmt.Errorf("%s 需要选择副特性", sigil.DisplayName)
@@ -470,7 +470,7 @@ func (sg *SigilGen) ApplyQueue(outputPath string) (*ApplyResult, error) {
 
 		var secondaryHash uint32
 		var secondaryLevel int
-		hasSecondary := sigil.SupportsSecondaryTrait != nil && *sigil.SupportsSecondaryTrait
+		hasSecondary := supportsGeneratedPlusSigil(sigil)
 		if hasSecondary {
 			secondaryTrait, _ := sg.catalog.RequireTrait(item.SecondaryTraitID)
 			secondaryHash, err = ParseHashHex(secondaryTrait.Hash)
@@ -511,7 +511,7 @@ func (sg *SigilGen) ApplyQueue(outputPath string) (*ApplyResult, error) {
 
 			var secondaryHash uint32
 			var secondaryLevel int
-			hasSecondary := sigil.SupportsSecondaryTrait != nil && *sigil.SupportsSecondaryTrait
+			hasSecondary := supportsGeneratedPlusSigil(sigil)
 			if hasSecondary {
 				secondaryTrait, _ := sg.catalog.RequireTrait(item.SecondaryTraitID)
 				secondaryHash, _ = ParseHashHex(secondaryTrait.Hash)
@@ -531,9 +531,9 @@ func (sg *SigilGen) ApplyQueue(outputPath string) (*ApplyResult, error) {
 
 	absPath, _ := filepath.Abs(outputPath)
 	return &ApplyResult{
-		CreatedCount: created,
+		CreatedCount:  created,
 		VerifiedCount: verified,
-		OutputPath:   absPath,
+		OutputPath:    absPath,
 	}, nil
 }
 
@@ -579,9 +579,9 @@ func (sg *SigilGen) RemoveAllSigils(inputPath, outputPath string) (*ApplyResult,
 
 	absPath, _ := filepath.Abs(outputPath)
 	return &ApplyResult{
-		CreatedCount: removed,
+		CreatedCount:  removed,
 		VerifiedCount: remaining,
-		OutputPath:   absPath,
+		OutputPath:    absPath,
 	}, nil
 }
 
@@ -768,9 +768,9 @@ func (sg *SigilGen) DeleteSelectedSigils(gemUnitIDs []int, outputPath string) (*
 
 	absPath, _ := filepath.Abs(outputPath)
 	return &ApplyResult{
-		CreatedCount: removed,
+		CreatedCount:  removed,
 		VerifiedCount: 0,
-		OutputPath:   absPath,
+		OutputPath:    absPath,
 	}, nil
 }
 
@@ -798,4 +798,3 @@ func containsInt(slice []int, val int) bool {
 	}
 	return false
 }
-
