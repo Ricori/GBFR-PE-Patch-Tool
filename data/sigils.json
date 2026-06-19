@@ -22221,7 +22221,7 @@
             "displayName": "War Elemental+",
             "category": null,
             "isPlusSigil": true,
-            "supportsSecondaryTrait": false,
+            "supportsSecondaryTrait": true,
             "allowedSigilLevels": [
                 15
             ],
@@ -26365,7 +26365,7 @@
             "displayName": "Berserker Echo+",
             "category": null,
             "isPlusSigil": null,
-            "supportsSecondaryTrait": false,
+            "supportsSecondaryTrait": true,
             "allowedSigilLevels": [
                 15
             ],

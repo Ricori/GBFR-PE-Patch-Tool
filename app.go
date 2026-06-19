@@ -1123,7 +1123,7 @@ func (a *App) scanPatternUnique(pattern []byte, mask []bool, label string) (uint
 		return 0, err
 	}
 	const chunkSize uintptr = 0x10000
-	patternLen := len(countdownPattern)
+	patternLen := len(pattern)
 	var matches []uintptr
 	var carry []byte
 	var carryBase uintptr
@@ -1338,4 +1338,118 @@ func writeCodeMemory(h windows.Handle, addr uintptr, data []byte) error {
 	var restoreProtect uint32
 	_ = windows.VirtualProtectEx(h, addr, uintptr(len(data)), oldProtect, &restoreProtect)
 	return writeErr
+}
+
+var (
+	modKernel32              = windows.NewLazySystemDLL("kernel32.dll")
+	procVirtualAllocEx       = modKernel32.NewProc("VirtualAllocEx")
+	procVirtualFreeEx        = modKernel32.NewProc("VirtualFreeEx")
+	procVirtualQueryEx       = modKernel32.NewProc("VirtualQueryEx")
+)
+
+type memoryBasicInformation struct {
+	BaseAddress       uintptr
+	AllocationBase    uintptr
+	AllocationProtect uint32
+	PartitionId       uint16
+	RegionSize        uintptr
+	State             uint32
+	Protect           uint32
+	Type              uint32
+}
+
+func virtualAllocRemoteNear(h windows.Handle, nearAddr uintptr, size uintptr) (uintptr, error) {
+	const (
+		memCommit             = 0x1000
+		memReserve            = 0x2000
+		memFree               = 0x10000
+		pageExecuteReadWrite  = 0x40
+		allocGranularity      = uintptr(0x10000)
+		maxRel32Distance int64 = 0x7FFFFFFF
+	)
+
+	alignDown := func(v uintptr) uintptr { return v &^ (allocGranularity - 1) }
+	tryAlloc := func(addr uintptr) uintptr {
+		ret, _, _ := procVirtualAllocEx.Call(
+			uintptr(h),
+			addr,
+			size,
+			uintptr(memCommit|memReserve),
+			uintptr(pageExecuteReadWrite),
+		)
+		return ret
+	}
+	isReachable := func(addr uintptr) bool {
+		delta := int64(addr) - int64(nearAddr)
+		if delta < 0 {
+			delta = -delta
+		}
+		return delta <= maxRel32Distance
+	}
+
+	if addr := tryAlloc(nearAddr); addr != 0 && isReachable(addr) {
+		return addr, nil
+	}
+
+	base := alignDown(nearAddr)
+	for step := uintptr(0); step <= uintptr(maxRel32Distance); step += allocGranularity {
+		candidates := [2]uintptr{}
+		count := 0
+		if step == 0 {
+			candidates[count] = base
+			count++
+		} else {
+			if base >= step {
+				candidates[count] = base - step
+				count++
+			}
+			if base <= ^uintptr(0)-step {
+				candidates[count] = base + step
+				count++
+			}
+		}
+
+		for i := 0; i < count; i++ {
+			candidate := candidates[i]
+			if !isReachable(candidate) {
+				continue
+			}
+
+			var mbi memoryBasicInformation
+			ret, _, _ := procVirtualQueryEx.Call(
+				uintptr(h),
+				candidate,
+				uintptr(unsafe.Pointer(&mbi)),
+				unsafe.Sizeof(mbi),
+			)
+			if ret == 0 {
+				continue
+			}
+			if mbi.State != memFree || mbi.RegionSize < size {
+				continue
+			}
+			allocBase := alignDown(mbi.BaseAddress)
+			if !isReachable(allocBase) {
+				continue
+			}
+			if addr := tryAlloc(allocBase); addr != 0 && isReachable(addr) {
+				return addr, nil
+			}
+		}
+	}
+
+	return 0, fmt.Errorf("VirtualAllocEx 附近分配失败")
+}
+
+func virtualFreeRemote(h windows.Handle, addr uintptr) error {
+	ret, _, _ := procVirtualFreeEx.Call(
+		uintptr(h),
+		addr,
+		0,
+		uintptr(0x8000), // MEM_RELEASE
+	)
+	if ret == 0 {
+		return fmt.Errorf("VirtualFreeEx 失败")
+	}
+	return nil
 }

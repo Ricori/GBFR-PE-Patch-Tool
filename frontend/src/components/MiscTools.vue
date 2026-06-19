@@ -135,6 +135,8 @@ function openReleasePage() {
   OpenReleasePage(updateInfo.releaseUrl || '')
     .catch((err) => emit('status', String(err), 'error'))
 }
+
+
 </script>
 
 <template>
@@ -208,6 +210,7 @@ function openReleasePage() {
           </div>
           <div class="memory-bytes">{{ faceAccessoryStatus.currentBytes || '未定位' }}</div>
         </div>
+
       </template>
       <div v-else class="empty">请先连接游戏进程</div>
     </div>
@@ -276,4 +279,19 @@ function openReleasePage() {
 .btn-refresh:hover, .btn-sort:hover { background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.7); }
 .btn-refresh:disabled, .btn-sort:disabled { opacity:0.4; cursor:not-allowed; }
 .empty { font-size:0.78rem; color:rgba(255,255,255,0.3); text-align:center; padding:12px 0; }
+.od-select {
+  padding:6px 10px; border-radius:6px; border:1px solid rgba(255,255,255,0.15);
+  background:rgba(255,255,255,0.07); color:#fff; font-size:0.8rem; outline:none; cursor:pointer;
+}
+.od-select:focus { border-color:rgba(103,232,249,0.5); }
+.od-select option { background:#1a1a2e; color:#fff; }
+.od-indicator {
+  font-size:0.72rem; padding:4px 10px; border-radius:6px; text-align:center;
+  background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.35);
+  transition:all 0.3s;
+}
+.od-mode-active { background:rgba(250,204,21,0.15); color:#facc15; border:1px solid rgba(250,204,21,0.25); }
+.od-burst-active { background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.25); animation:od-burst-pulse 1s infinite alternate; }
+@keyframes od-burst-pulse { from { opacity:0.7; } to { opacity:1; } }
+.burst-timer { color:#facc15; font-weight:600; font-family:'Courier New',monospace; }
 </style>
