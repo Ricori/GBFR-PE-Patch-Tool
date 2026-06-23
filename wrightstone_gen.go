@@ -336,11 +336,6 @@ func (wg *WrightstoneGen) applyItems(items []WrightstoneQueueItem, outputPath st
 	if outputPath == "" {
 		return nil, fmt.Errorf("请输入输出路径")
 	}
-	if absIn, _ := filepath.Abs(wg.savePath); absIn != "" {
-		if absOut, _ := filepath.Abs(outputPath); absIn == absOut {
-			return nil, fmt.Errorf("输出路径不能和输入存档相同")
-		}
-	}
 	if err := wg.ensureCatalog(); err != nil {
 		return nil, err
 	}

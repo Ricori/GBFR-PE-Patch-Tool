@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"path/filepath"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // ── 前端交互数据结构 ──
@@ -57,6 +60,7 @@ type ApplyResult struct {
 // ── SigilGen 主体 ──
 
 type SigilGen struct {
+	ctx      context.Context
 	catalog  *Catalog
 	save     *SaveData
 	savePath string
@@ -66,6 +70,8 @@ type SigilGen struct {
 func NewSigilGen() *SigilGen {
 	return &SigilGen{}
 }
+
+func (sg *SigilGen) startup(ctx context.Context) { sg.ctx = ctx }
 
 // LoadCatalog 加载数据目录（从嵌入的 JSON 文件）
 func (sg *SigilGen) LoadCatalog() error {
@@ -248,6 +254,40 @@ func (sg *SigilGen) GetPrimaryTrait(sigilID string) (*TraitInfo, error) {
 		MaxLevel:      derefInt(trait.MaxLevel),
 		AllowedLevels: trait.AllowedLevels,
 	}, nil
+}
+
+func (sg *SigilGen) SelectSigilInputSave() (string, error) {
+	if sg.ctx == nil {
+		return "", fmt.Errorf("Wails 上下文未初始化")
+	}
+	return runtime.OpenFileDialog(sg.ctx, runtime.OpenDialogOptions{
+		Title: "选择 GBFR 存档文件",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "GBFR 存档 (*.dat)", Pattern: "*.dat"},
+			{DisplayName: "所有文件 (*.*)", Pattern: "*.*"},
+		},
+	})
+}
+
+func (sg *SigilGen) SelectSigilOutputSave(defaultPath string) (string, error) {
+	if sg.ctx == nil {
+		return "", fmt.Errorf("Wails 上下文未初始化")
+	}
+	defaultDir := ""
+	defaultName := ""
+	if defaultPath != "" {
+		defaultDir = filepath.Dir(defaultPath)
+		defaultName = filepath.Base(defaultPath)
+	}
+	return runtime.SaveFileDialog(sg.ctx, runtime.SaveDialogOptions{
+		Title:            "选择输出存档文件",
+		DefaultDirectory: defaultDir,
+		DefaultFilename:  defaultName,
+		Filters: []runtime.FileFilter{
+			{DisplayName: "GBFR 存档 (*.dat)", Pattern: "*.dat"},
+			{DisplayName: "所有文件 (*.*)", Pattern: "*.*"},
+		},
+	})
 }
 
 // ── 存档操作 ──

@@ -1,11 +1,13 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { GetLastSavePath, SetLastSavePath } from '../../wailsjs/go/main/App'
 import { GetSigilList, GetCompatibleSecondaryTraits, GetAllowedLevels,
          GetPrimaryTraitLevels, GetSecondaryTraitLevels, GetPrimaryTrait,
          GetDefaultSecondaryTrait, LoadSaveFile, GetLoadedSaveInfo,
          GetQueue, AddToQueue, RemoveFromQueue, ClearQueue,
          ApplyQueue, RemoveAllSigils,
-         GetExistingSigils, DeleteSelectedSigils } from '../../wailsjs/go/main/SigilGen'
+         GetExistingSigils, DeleteSelectedSigils,
+         SelectSigilInputSave, SelectSigilOutputSave } from '../../wailsjs/go/main/SigilGen'
 
 const emit = defineEmits(['status'])
 
@@ -16,6 +18,7 @@ const sigils = ref([])
 const saveLoaded = ref(false)
 const saveInfo = reactive({ path: '', occupiedSigils: 0, maxSlotId: 0 })
 const isApplying = ref(false)
+const inPlaceEdit = ref(false)
 
 // 表单
 const selectedSigilID = ref('')
@@ -70,6 +73,11 @@ onMounted(async () => {
     if (!sigils.value || !sigils.value.length) {
       dataError.value = '因子数据为空'
     }
+    const lastPath = await GetLastSavePath()
+    if (lastPath) {
+      inputPath.value = lastPath
+      outputPath.value = defaultOutputPath(lastPath)
+    }
   } catch (e) {
     dataError.value = '加载因子数据失败: ' + String(e)
   } finally {
@@ -79,13 +87,45 @@ onMounted(async () => {
 
 // ── 存档 ──
 const inputPath = ref('')
+
+function defaultOutputPath(path) {
+  if (!path) return ''
+  if (/\.dat$/i.test(path)) return path.replace(/(\.dat)$/i, '_modified.dat')
+  return `${path}_modified.dat`
+}
+
+watch(inPlaceEdit, (enabled) => {
+  if (enabled) {
+    outputPath.value = inputPath.value.trim()
+  } else if (outputPath.value.trim() === inputPath.value.trim()) {
+    outputPath.value = defaultOutputPath(inputPath.value.trim())
+  }
+})
+
+async function browseInput() {
+  try {
+    const path = await SelectSigilInputSave()
+    if (!path) return
+    inputPath.value = path
+    await loadSave()
+  } catch (e) { showStatus(String(e), 'error') }
+}
+
+async function browseOutput() {
+  try {
+    const path = await SelectSigilOutputSave(outputPath.value.trim() || defaultOutputPath(inputPath.value.trim()))
+    if (path) outputPath.value = path
+  } catch (e) { showStatus(String(e), 'error') }
+}
+
 async function loadSave() {
   if (!inputPath.value.trim()) { showStatus('请输入存档路径', 'error'); return }
   try {
     const info = await LoadSaveFile(inputPath.value.trim())
     Object.assign(saveInfo, info)
     saveLoaded.value = true
-    outputPath.value = info.path.replace(/(\.dat)$/i, '_modified.dat')
+    outputPath.value = inPlaceEdit.value ? info.path : defaultOutputPath(info.path)
+    await SetLastSavePath(info.path)
     showExisting.value = true
     await refreshExisting()
     showStatus(`已加载存档: ${info.occupiedSigils} 个因子`, 'success')
@@ -128,7 +168,11 @@ async function deleteSelected() {
   try {
     const ids = Array.from(selectedForDelete.value)
     const result = await DeleteSelectedSigils(ids, outputPath.value.trim())
-    await refreshExisting()
+    if (inPlaceEdit.value) {
+      await loadSave()
+    } else {
+      await refreshExisting()
+    }
     showStatus(`已删除 ${result.createdCount} 个因子`, 'success')
   } catch (e) {
     showStatus(String(e), 'error')
@@ -236,6 +280,7 @@ async function applyQueueToSave() {
   try {
     const result = await ApplyQueue(outputPath.value.trim())
     queue.value = []
+    if (inPlaceEdit.value) await loadSave()
     showStatus(`已写入 ${result.createdCount} 个因子 (验证 ${result.verifiedCount})`, 'success')
   } catch (e) { showStatus(String(e), 'error') }
   finally { isApplying.value = false }
@@ -248,6 +293,9 @@ async function removeAll() {
   if (!confirm('这将清除输出存档中的所有因子，确定继续？')) return
   try {
     const result = await RemoveAllSigils(inputPath.value.trim(), outputPath.value.trim())
+    if (inPlaceEdit.value) {
+      await loadSave()
+    }
     showStatus(`已清除 ${result.createdCount} 个因子 (剩余 ${result.verifiedCount})`, 'success')
   } catch (e) { showStatus(String(e), 'error') }
 }
@@ -274,7 +322,8 @@ function onSecondaryTraitSelect() {
       <div class="section-title">存档文件</div>
       <div class="input-row">
         <input v-model="inputPath" type="text" class="text-input flex-1"
-          placeholder="选择 GBFR 存档文件 (.dat)..." />
+          placeholder="GBFR 存档文件 (.dat | C:\Users\UserName\AppData\Local\GBFR\Saved\SaveGames\)" />
+        <button class="btn-action btn-cyan" @click="browseInput">浏览</button>
         <button class="btn-action btn-green" @click="loadSave">加载</button>
       </div>
       <div v-if="saveLoaded" class="save-info">
@@ -429,12 +478,19 @@ function onSecondaryTraitSelect() {
       <div class="section-title">输出</div>
       <div class="input-row">
         <input v-model="outputPath" type="text" class="text-input flex-1"
+          :class="{ 'danger-path': inPlaceEdit }" :readonly="inPlaceEdit"
           placeholder="输出存档路径..." />
+        <button class="btn-action btn-cyan" @click="browseOutput" :disabled="inPlaceEdit">浏览</button>
         <button class="btn-action btn-cyan" @click="applyQueueToSave"
           :disabled="isApplying || !queue.length">
           {{ isApplying ? '写入中...' : '应用写入' }}
         </button>
       </div>
+      <label class="toggle-row">
+        <input v-model="inPlaceEdit" type="checkbox" />
+        <span>启用原地修改（直接覆盖输入存档）</span>
+      </label>
+      <div v-if="inPlaceEdit" class="danger-hint">警告：启用后，应用写入将直接覆盖当前输入存档，建议先备份。</div>
     </div>
 
     <!-- 清除所有 -->
@@ -635,6 +691,31 @@ function onSecondaryTraitSelect() {
   border: 1px solid rgba(251,191,36,0.15);
   border-radius: 6px;
   line-height: 1.5;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.75);
+}
+
+.danger-hint {
+  font-size: 0.72rem;
+  color: rgba(248,113,113,0.95);
+  text-align: center;
+  padding: 8px 12px;
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 6px;
+  line-height: 1.5;
+}
+
+.danger-path {
+  background: rgba(239,68,68,0.14) !important;
+  border-color: rgba(239,68,68,0.55) !important;
+  color: #fecaca;
 }
 
 /* 因子选择列表 */

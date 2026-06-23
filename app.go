@@ -93,6 +93,10 @@ type UpdateInfo struct {
 	Assets         []UpdateAsset `json:"assets"`
 }
 
+type AppConfig struct {
+	LastSavePath string `json:"lastSavePath"`
+}
+
 // ── App ──
 
 type App struct {
@@ -104,11 +108,83 @@ type App struct {
 	charaPID          uint32
 	countdownAddr     uintptr
 	faceAccessoryAddr uintptr
+	config            AppConfig
+	configLoaded      bool
 }
 
 func NewApp() *App { return &App{} }
 
 func (a *App) startup(ctx context.Context) { a.ctx = ctx }
+
+func (a *App) configFilePath() (string, error) {
+	base, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "gbfr-player-info-edit", "config.json"), nil
+}
+
+func (a *App) loadConfig() error {
+	if a.configLoaded {
+		return nil
+	}
+	a.configLoaded = true
+	path, err := a.configFilePath()
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			a.config = AppConfig{}
+			return nil
+		}
+		return err
+	}
+	if len(data) == 0 {
+		a.config = AppConfig{}
+		return nil
+	}
+	if err := json.Unmarshal(data, &a.config); err != nil {
+		a.config = AppConfig{}
+		return nil
+	}
+	return nil
+}
+
+func (a *App) saveConfig() error {
+	path, err := a.configFilePath()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(a.config, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o644)
+}
+
+func (a *App) GetLastSavePath() (string, error) {
+	if err := a.loadConfig(); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(a.config.LastSavePath), nil
+}
+
+func (a *App) SetLastSavePath(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil
+	}
+	if err := a.loadConfig(); err != nil {
+		return err
+	}
+	a.config.LastSavePath = path
+	return a.saveConfig()
+}
 
 func (a *App) GetAppVersion() string {
 	return appVersion

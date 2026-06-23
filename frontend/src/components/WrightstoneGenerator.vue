@@ -1,5 +1,6 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { GetLastSavePath, SetLastSavePath } from '../../wailsjs/go/main/App'
 import { GetWrightstoneList, GetTraitList, GetTraitLevels, GetDefaultTrait,
          LoadSaveFile, GetQueue, AddToQueue, RemoveFromQueue, ClearQueue,
          ApplyQueue, ApplyItems, FileExists, SelectWrightstoneInputSave,
@@ -13,6 +14,7 @@ const traits = ref([])
 const saveLoaded = ref(false)
 const saveInfo = reactive({ path: '', occupiedWrightstones: 0, maxSlotId: 0 })
 const isApplying = ref(false)
+const inPlaceEdit = ref(false)
 
 const inputPath = ref('')
 const outputPath = ref('')
@@ -54,6 +56,11 @@ onMounted(async () => {
     if (!wrightstones.value.length || !traits.value.length) {
       dataError.value = '祝福或特性数据为空'
     }
+    const lastPath = await GetLastSavePath()
+    if (lastPath) {
+      inputPath.value = lastPath
+      outputPath.value = defaultOutputPath(lastPath)
+    }
   } catch (e) {
     dataError.value = '加载祝福数据失败: ' + String(e)
   } finally {
@@ -66,6 +73,14 @@ function defaultOutputPath(path) {
   if (/\.dat$/i.test(path)) return path.replace(/(\.dat)$/i, '_wrightstones.dat')
   return `${path}_wrightstones.dat`
 }
+
+watch(inPlaceEdit, (enabled) => {
+  if (enabled) {
+    outputPath.value = inputPath.value.trim()
+  } else if (outputPath.value.trim() === inputPath.value.trim()) {
+    outputPath.value = defaultOutputPath(inputPath.value.trim())
+  }
+})
 
 async function browseInput() {
   try {
@@ -89,7 +104,8 @@ async function loadSave() {
     const info = await LoadSaveFile(inputPath.value.trim())
     Object.assign(saveInfo, info)
     saveLoaded.value = true
-    outputPath.value = defaultOutputPath(info.path)
+    outputPath.value = inPlaceEdit.value ? info.path : defaultOutputPath(info.path)
+    await SetLastSavePath(info.path)
     showStatus(`已加载存档: ${info.occupiedWrightstones} 个祝福`, 'success')
   } catch (e) {
     showStatus(String(e), 'error')
@@ -199,6 +215,7 @@ async function applyQueueToSave() {
       ? await ApplyQueue(output)
       : await ApplyItems([buildCurrentItem()], output)
     queue.value = []
+    if (inPlaceEdit.value) await loadSave()
     showStatus(`已写入 ${result.createdCount} 个祝福 (验证 ${result.verifiedCount})`, 'success')
   } catch (e) { showStatus(String(e), 'error') }
   finally { isApplying.value = false }
@@ -210,7 +227,7 @@ async function applyQueueToSave() {
     <div class="section">
       <div class="section-title">存档文件</div>
       <div class="input-row">
-        <input v-model="inputPath" type="text" class="text-input flex-1" placeholder="选择 GBFR 存档文件 (.dat)..." />
+        <input v-model="inputPath" type="text" class="text-input flex-1" placeholder="GBFR 存档文件 (.dat | C:\Users\UserName\AppData\Local\GBFR\Saved\SaveGames\)" />
         <button class="btn-action btn-cyan" @click="browseInput">浏览</button>
         <button class="btn-action btn-green" @click="loadSave">加载</button>
       </div>
@@ -290,13 +307,19 @@ async function applyQueueToSave() {
     <div class="section">
       <div class="section-title">输出</div>
       <div class="input-row">
-        <input v-model="outputPath" type="text" class="text-input flex-1" placeholder="输出存档路径..." />
-        <button class="btn-action btn-cyan" @click="browseOutput">浏览</button>
+        <input v-model="outputPath" type="text" class="text-input flex-1" :class="{ 'danger-path': inPlaceEdit }"
+          :readonly="inPlaceEdit" placeholder="输出存档路径..." />
+        <button class="btn-action btn-cyan" @click="browseOutput" :disabled="inPlaceEdit">浏览</button>
         <button class="btn-action btn-cyan" @click="applyQueueToSave" :disabled="isApplying || !canApply">
           {{ isApplying ? '写入中...' : '应用写入' }}
         </button>
       </div>
-      <div class="warning-hint">安全提示：只写入输出存档，不会覆盖原始输入存档；已有输出文件会先确认。</div>
+      <label class="toggle-row">
+        <input v-model="inPlaceEdit" type="checkbox" />
+        <span>启用原地修改（直接覆盖输入存档）</span>
+      </label>
+      <div v-if="inPlaceEdit" class="danger-hint">警告：启用后，应用写入将直接覆盖当前输入存档，建议先备份。</div>
+      <div v-else class="warning-hint">安全提示：只写入输出存档，不会覆盖原始输入存档；已有输出文件会先确认。</div>
     </div>
   </div>
 </template>
@@ -335,6 +358,9 @@ async function applyQueueToSave() {
 .save-info { font-size: 0.72rem; color: rgba(74,222,128,0.6); }
 .empty-hint { font-size: 0.75rem; color: rgba(255,255,255,0.2); text-align: center; padding: 8px 0; }
 .warning-hint { font-size: 0.72rem; color: rgba(251,191,36,0.8); }
+.toggle-row { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: rgba(255,255,255,0.75); }
+.danger-hint { font-size: 0.72rem; color: rgba(248,113,113,0.95); padding: 8px 12px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); border-radius: 6px; line-height: 1.5; }
+.danger-path { background: rgba(239,68,68,0.14) !important; border-color: rgba(239,68,68,0.55) !important; color: #fecaca; }
 .data-error { font-size: 0.75rem; color: #f87171; }
 .queue-list { display: flex; flex-direction: column; gap: 6px; }
 .queue-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06); }
