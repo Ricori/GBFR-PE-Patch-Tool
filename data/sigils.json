@@ -4165,7 +4165,7 @@
             "displayName": "Improved Dodge+",
             "category": "support_sigil",
             "isPlusSigil": true,
-            "supportsSecondaryTrait": false,
+            "supportsSecondaryTrait": true,
             "allowedSigilLevels": [
                 15
             ],
@@ -23193,7 +23193,7 @@
             "displayName": "Alpha+",
             "category": "opus_sigil",
             "isPlusSigil": true,
-            "supportsSecondaryTrait": false,
+            "supportsSecondaryTrait": true,
             "allowedSigilLevels": [
                 15
             ],
@@ -23210,8 +23210,8 @@
             "notes": "Opus sigil. DMG Cap is the normal/default secondary trait, but the tool intentionally permits any known secondary trait for offline/local impossible-sigil testing.",
             "source": "Nenkai Sigil/Gem IDs; Nenkai Trait/Skill IDs; user offline testing requirement",
             "confidence": "medium",
-            "defaultSecondaryTraitId": null,
-            "defaultSecondaryTraitName": null
+            "defaultSecondaryTraitId": "SKILL_020_00",
+            "defaultSecondaryTraitName": "DMG Cap"
         },
         {
             "internalId": "GEEN_161_04",
@@ -23219,7 +23219,7 @@
             "displayName": "Beta+",
             "category": "opus_sigil",
             "isPlusSigil": true,
-            "supportsSecondaryTrait": false,
+            "supportsSecondaryTrait": true,
             "allowedSigilLevels": [
                 15
             ],
@@ -23236,8 +23236,8 @@
             "notes": "Opus sigil. DMG Cap is the normal/default secondary trait, but the tool intentionally permits any known secondary trait for offline/local impossible-sigil testing.",
             "source": "Nenkai Sigil/Gem IDs; Nenkai Trait/Skill IDs; user offline testing requirement",
             "confidence": "medium",
-            "defaultSecondaryTraitId": null,
-            "defaultSecondaryTraitName": null
+            "defaultSecondaryTraitId": "SKILL_020_00",
+            "defaultSecondaryTraitName": "DMG Cap"
         },
         {
             "internalId": "GEEN_162_04",
@@ -23245,7 +23245,7 @@
             "displayName": "Gamma+",
             "category": "opus_sigil",
             "isPlusSigil": true,
-            "supportsSecondaryTrait": false,
+            "supportsSecondaryTrait": true,
             "allowedSigilLevels": [
                 15
             ],
@@ -23262,8 +23262,8 @@
             "notes": "Opus sigil. DMG Cap is the normal/default secondary trait, but the tool intentionally permits any known secondary trait for offline/local impossible-sigil testing.",
             "source": "Nenkai Sigil/Gem IDs; Nenkai Trait/Skill IDs; user offline testing requirement",
             "confidence": "medium",
-            "defaultSecondaryTraitId": null,
-            "defaultSecondaryTraitName": null
+            "defaultSecondaryTraitId": "SKILL_020_00",
+            "defaultSecondaryTraitName": "DMG Cap"
         },
         {
             "internalId": "GEEN_164_00",
