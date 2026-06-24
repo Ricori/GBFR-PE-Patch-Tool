@@ -282,26 +282,46 @@ func (c *Catalog) GetAllowedSecondaryTraits(sigil *SigilDef) ([]*TraitDef, error
 	for _, id := range sigil.DisallowedSecondaryTraitIDs {
 		disallowed[id] = true
 	}
-	if sigil.PrimaryTraitID != "" {
-		disallowed[sigil.PrimaryTraitID] = true
+
+	seen := make(map[string]bool)
+	appendIfAllowed := func(result []*TraitDef, trait *TraitDef) []*TraitDef {
+		if trait == nil {
+			return result
+		}
+		if seen[trait.InternalID] {
+			return result
+		}
+		if !isSelectableTrait(trait) {
+			return result
+		}
+		if disallowed[trait.InternalID] {
+			return result
+		}
+		if trait.CanAppearAsSecondary != nil && !*trait.CanAppearAsSecondary {
+			return result
+		}
+		if trait.BannedAsSecondaryOnPlusSigils != nil && *trait.BannedAsSecondaryOnPlusSigils {
+			return result
+		}
+		seen[trait.InternalID] = true
+		return append(result, trait)
+	}
+
+	if len(sigil.AllowedSecondaryTraitIDs) > 0 {
+		result := make([]*TraitDef, 0, len(sigil.AllowedSecondaryTraitIDs))
+		for _, id := range sigil.AllowedSecondaryTraitIDs {
+			trait, err := c.RequireTrait(id)
+			if err != nil {
+				continue
+			}
+			result = appendIfAllowed(result, trait)
+		}
+		return result, nil
 	}
 
 	result := make([]*TraitDef, 0, len(c.Traits))
 	for i := range c.Traits {
-		trait := &c.Traits[i]
-		if !isSelectableTrait(trait) {
-			continue
-		}
-		if disallowed[trait.InternalID] {
-			continue
-		}
-		if trait.CanAppearAsSecondary != nil && !*trait.CanAppearAsSecondary {
-			continue
-		}
-		if trait.BannedAsSecondaryOnPlusSigils != nil && *trait.BannedAsSecondaryOnPlusSigils {
-			continue
-		}
-		result = append(result, trait)
+		result = appendIfAllowed(result, &c.Traits[i])
 	}
 	return result, nil
 }
