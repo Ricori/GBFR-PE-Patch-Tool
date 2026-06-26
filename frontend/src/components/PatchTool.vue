@@ -7,6 +7,7 @@ import WrightstoneGenerator from './WrightstoneGenerator.vue'
 import SaveEditor from './SaveEditor.vue'
 import CharaStats from './CharaStats.vue'
 import MiscTools from './MiscTools.vue'
+import MonsterEnhance from './MonsterEnhance.vue'
 
 const state = reactive({
   exePath: '',
@@ -159,6 +160,9 @@ function showStatus(msg, type) {
       <button class="tab-btn" :class="{ active: activeTab === 'misc' }" @click="activeTab = 'misc'">
         杂项
       </button>
+      <button class="tab-btn" :class="{ active: activeTab === 'monster' }" @click="activeTab = 'monster'">
+        怪物增强
+      </button>
     </div>
 
     <main v-if="activeTab === 'patch'" class="container" style="--wails-draggable:no-drag">
@@ -246,6 +250,10 @@ function showStatus(msg, type) {
 
     <main v-else-if="activeTab === 'misc'" class="container" style="--wails-draggable:no-drag">
       <MiscTools @status="showStatus" />
+    </main>
+
+    <main v-else-if="activeTab === 'monster'" class="container" style="--wails-draggable:no-drag">
+      <MonsterEnhance @status="showStatus" />
     </main>
   </div>
 </template>

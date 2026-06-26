@@ -25,3 +25,12 @@ frontend/wailsjs/
 因子生成功能查漏补缺进度.md
 
 gbfrPlayerInfoEdit.exe
+
+#libmem
+
+patch_core.dll
+patch_core.exp
+patch_core.lib
+patch_core.pdb
+todo.txt
+.vs

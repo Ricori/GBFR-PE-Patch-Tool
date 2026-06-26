@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -27,6 +28,9 @@ const (
 	repoOwner   = "BitterG"
 	repoName    = "GBFR-PE-Patch-Tool"
 )
+
+//go:embed build/bin/patch_core.dll
+var patchCoreDLL []byte
 
 // ── 补丁定义 ──
 
@@ -1305,6 +1309,296 @@ func (a *App) readCountdownStatus(addr uintptr) (CountdownStatus, error) {
 	}, nil
 }
 
+// ── 怪物增强 (注入 patch_core.dll) ──
+
+type MonsterEnhanceResult struct {
+	PID          uint32               `json:"pid"`
+	DLLPath      string               `json:"dllPath"`
+	Injected     bool                 `json:"injected"`
+	Enabled      bool                 `json:"enabled"`
+	CurrentBytes string               `json:"currentBytes"`
+	Items        []MonsterEnhanceItem `json:"items"`
+}
+
+type MonsterEnhanceItem struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	RVA          uint64 `json:"rva"`
+	Enabled      bool   `json:"enabled"`
+	CurrentBytes string `json:"currentBytes"`
+}
+
+type monsterPatchPoint struct {
+	ID       string
+	Name     string
+	RVA      uintptr
+	Original []byte
+	Patch    []byte
+	Hook     bool
+}
+
+var monsterPatchPoints = []monsterPatchPoint{
+	{
+		ID:       "link_time_no_drain",
+		Name:     "无限 link time",
+		RVA:      0x187228,
+		Original: []byte{0xC4, 0xC1, 0x7A, 0x11, 0x9C, 0x24, 0xB4, 0x01, 0x00, 0x00},
+		Patch:    []byte{0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90},
+	},
+	{
+		ID:       "link_time_disable",
+		Name:     "无法进入 link time",
+		RVA:      0x187228,
+		Original: []byte{0xC4, 0xC1, 0x7A, 0x11, 0x9C, 0x24, 0xB4, 0x01, 0x00, 0x00},
+		Patch:    []byte{0xC4, 0xC1, 0x7A, 0x11, 0x84, 0x24, 0xB4, 0x01, 0x00, 0x00},
+	},
+	{
+		ID:       "monster_hp",
+		Name:     "怪物倍血",
+		RVA:      0x1B3F798,
+		Original: []byte{0x01, 0x91, 0xB8, 0x15, 0x00, 0x00},
+		Hook:     true,
+	},
+	{
+		ID:       "purple_drain",
+		Name:     "紫条不自然扣减",
+		RVA:      0xA0379A,
+		Original: []byte{0xC4, 0xC1, 0x7A, 0x11, 0x85, 0x10, 0x0A, 0x00, 0x00},
+		Patch:    []byte{0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90},
+	},
+	{
+		ID:       "blue_grow",
+		Name:     "昏厥蓝条不增长",
+		RVA:      0xA09AF1,
+		Original: []byte{0xC4, 0xC1, 0x7A, 0x11, 0x85, 0x20, 0x07, 0x00, 0x00},
+		Patch:    []byte{0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90},
+	},
+	{
+		ID:       "blue_drain",
+		Name:     "昏厥蓝条不自然扣减",
+		RVA:      0xA03F38,
+		Original: []byte{0xC4, 0xC1, 0x7A, 0x11, 0x85, 0x70, 0x0A, 0x00, 0x00},
+		Patch:    []byte{0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90},
+	},
+}
+
+func (a *App) MonsterEnhanceGetStatus() (MonsterEnhanceResult, error) {
+	if err := a.ensureGameProcess(); err != nil {
+		return MonsterEnhanceResult{}, err
+	}
+	return a.readMonsterEnhanceStatus("")
+}
+
+func (a *App) MonsterEnhanceSetEnabled(enabled bool) (MonsterEnhanceResult, error) {
+	return a.MonsterEnhanceSetPatchEnabled("all", enabled)
+}
+
+func (a *App) MonsterEnhanceSetPatchEnabled(id string, enabled bool) (MonsterEnhanceResult, error) {
+	return a.MonsterEnhanceSetPatchValueEnabled(id, enabled, 0)
+}
+
+func (a *App) MonsterEnhanceSetPatchValueEnabled(id string, enabled bool, hpMultiplier float64) (MonsterEnhanceResult, error) {
+	if err := a.ensureGameProcess(); err != nil {
+		return MonsterEnhanceResult{}, err
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return MonsterEnhanceResult{}, fmt.Errorf("怪物增强项目为空")
+	}
+	point := findMonsterPatchPoint(id)
+	if id != "all" && point == nil {
+		return MonsterEnhanceResult{}, fmt.Errorf("未知怪物增强项目: %s", id)
+	}
+	if enabled && point != nil && point.ID == "monster_hp" && (math.IsNaN(hpMultiplier) || math.IsInf(hpMultiplier, 0) || hpMultiplier <= 0 || hpMultiplier > 9999) {
+		return MonsterEnhanceResult{}, fmt.Errorf("怪物倍血请输入 0 到 9999 之间的数值")
+	}
+
+	if enabled {
+		command := id
+		if point != nil && point.ID == "monster_hp" {
+			command = fmt.Sprintf("%s %.8g", id, 1/hpMultiplier)
+		}
+		dllPath, err := extractPatchCoreDLL(command)
+		if err != nil {
+			return MonsterEnhanceResult{}, err
+		}
+		if err := injectDLL(a.hProcess, dllPath); err != nil {
+			return MonsterEnhanceResult{}, fmt.Errorf("注入怪物增强 DLL 失败: %w", err)
+		}
+		status, err := a.waitMonsterEnhanceApplied(id, dllPath)
+		if err != nil {
+			return MonsterEnhanceResult{}, err
+		}
+		status.Injected = true
+		return status, nil
+	}
+
+	if err := a.restoreMonsterEnhance(id); err != nil {
+		return MonsterEnhanceResult{}, err
+	}
+	return a.readMonsterEnhanceStatus("")
+}
+
+func (a *App) MonsterEnhanceInject() (MonsterEnhanceResult, error) {
+	return a.MonsterEnhanceSetEnabled(true)
+}
+
+func (a *App) waitMonsterEnhanceApplied(id string, dllPath string) (MonsterEnhanceResult, error) {
+	var last MonsterEnhanceResult
+	var err error
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		last, err = a.readMonsterEnhanceStatus(dllPath)
+		if err == nil && monsterStatusHasPatch(last, id) {
+			return last, nil
+		}
+		if time.Now().After(deadline) {
+			if err != nil {
+				return MonsterEnhanceResult{}, err
+			}
+			return last, nil
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func monsterStatusHasPatch(status MonsterEnhanceResult, id string) bool {
+	if id == "all" {
+		return status.Enabled
+	}
+	for _, item := range status.Items {
+		if item.ID == id {
+			return item.Enabled
+		}
+	}
+	return false
+}
+
+func (a *App) readMonsterEnhanceStatus(dllPath string) (MonsterEnhanceResult, error) {
+	patched := 0
+	var parts []string
+	items := make([]MonsterEnhanceItem, 0, len(monsterPatchPoints))
+	for _, point := range monsterPatchPoints {
+		current := make([]byte, len(point.Original))
+		addr := a.moduleBase + point.RVA
+		if err := readProcessMemory(a.hProcess, addr, unsafe.Pointer(&current[0]), uintptr(len(current))); err != nil {
+			return MonsterEnhanceResult{}, fmt.Errorf("读取%s失败: %w", point.Name, err)
+		}
+		currentHex := bytesToHex(current)
+		parts = append(parts, fmt.Sprintf("%s:%s", point.Name, currentHex))
+		enabled := false
+		if point.Hook {
+			enabled = len(current) > 0 && current[0] == 0xE9
+		} else {
+			enabled = bytesEqual(current, point.Patch)
+		}
+		if enabled {
+			patched++
+		} else if !bytesEqual(current, point.Original) && !isMonsterPatchBytesAtRVA(point.RVA, current) {
+			return MonsterEnhanceResult{}, fmt.Errorf("%s指令字节未知: %s", point.Name, currentHex)
+		}
+		items = append(items, MonsterEnhanceItem{
+			ID:           point.ID,
+			Name:         point.Name,
+			RVA:          uint64(point.RVA),
+			Enabled:      enabled,
+			CurrentBytes: currentHex,
+		})
+	}
+	return MonsterEnhanceResult{
+		PID:          a.charaPID,
+		DLLPath:      dllPath,
+		Enabled:      patched == len(monsterPatchPoints),
+		CurrentBytes: strings.Join(parts, " | "),
+		Items:        items,
+	}, nil
+}
+
+func (a *App) restoreMonsterEnhance(id string) error {
+	for _, point := range monsterPatchPoints {
+		if id != "all" && point.ID != id {
+			continue
+		}
+		current := make([]byte, len(point.Original))
+		addr := a.moduleBase + point.RVA
+		if err := readProcessMemory(a.hProcess, addr, unsafe.Pointer(&current[0]), uintptr(len(current))); err != nil {
+			return fmt.Errorf("读取%s失败: %w", point.Name, err)
+		}
+		if bytesEqual(current, point.Original) {
+			continue
+		}
+		if !bytesEqual(current, point.Patch) {
+			return fmt.Errorf("%s指令字节未知: %s", point.Name, bytesToHex(current))
+		}
+		if err := writeCodeMemory(a.hProcess, addr, point.Original); err != nil {
+			return fmt.Errorf("恢复%s失败: %w", point.Name, err)
+		}
+	}
+	return nil
+}
+
+func isMonsterPatchBytesAtRVA(rva uintptr, data []byte) bool {
+	for _, point := range monsterPatchPoints {
+		if point.RVA == rva && bytesEqual(data, point.Patch) {
+			return true
+		}
+	}
+	return false
+}
+
+func findMonsterPatchPoint(id string) *monsterPatchPoint {
+	for i := range monsterPatchPoints {
+		if monsterPatchPoints[i].ID == id {
+			return &monsterPatchPoints[i]
+		}
+	}
+	return nil
+}
+
+func extractPatchCoreDLL(patchID string) (string, error) {
+	if len(patchCoreDLL) == 0 {
+		return "", fmt.Errorf("内置 patch_core.dll 为空，请先编译 src_dll/patch_core Release x64")
+	}
+	dir := filepath.Join(os.TempDir(), "gbfr-player-info-edit")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(dir, "patch_core_command.txt"), []byte(patchID), 0o644); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, fmt.Sprintf("patch_core_%d.dll", time.Now().UnixNano()))
+	if err := os.WriteFile(path, patchCoreDLL, 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func injectDLL(h windows.Handle, dllPath string) error {
+	utf16Path, err := windows.UTF16FromString(dllPath)
+	if err != nil {
+		return err
+	}
+	size := uintptr(len(utf16Path) * 2)
+	remotePath, err := virtualAllocRemote(h, size, windows.PAGE_READWRITE)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = virtualFreeRemote(h, remotePath) }()
+
+	if err := writeProcessMemory(h, remotePath, unsafe.Pointer(&utf16Path[0]), size); err != nil {
+		return err
+	}
+
+	thread, err := createRemoteThread(h, procLoadLibraryW.Addr(), remotePath)
+	if err != nil {
+		return err
+	}
+	defer windows.CloseHandle(thread)
+
+	_, err = windows.WaitForSingleObject(thread, 10000)
+	return err
+}
+
 func findPatternMatches(buf []byte, base uintptr, pattern []byte, mask []bool) []uintptr {
 	if len(buf) < len(pattern) {
 		return nil
@@ -1457,10 +1751,12 @@ func writeCodeMemory(h windows.Handle, addr uintptr, data []byte) error {
 }
 
 var (
-	modKernel32        = windows.NewLazySystemDLL("kernel32.dll")
-	procVirtualAllocEx = modKernel32.NewProc("VirtualAllocEx")
-	procVirtualFreeEx  = modKernel32.NewProc("VirtualFreeEx")
-	procVirtualQueryEx = modKernel32.NewProc("VirtualQueryEx")
+	modKernel32            = windows.NewLazySystemDLL("kernel32.dll")
+	procVirtualAllocEx     = modKernel32.NewProc("VirtualAllocEx")
+	procVirtualFreeEx      = modKernel32.NewProc("VirtualFreeEx")
+	procVirtualQueryEx     = modKernel32.NewProc("VirtualQueryEx")
+	procLoadLibraryW       = modKernel32.NewProc("LoadLibraryW")
+	procCreateRemoteThread = modKernel32.NewProc("CreateRemoteThread")
 )
 
 type memoryBasicInformation struct {
@@ -1472,6 +1768,40 @@ type memoryBasicInformation struct {
 	State             uint32
 	Protect           uint32
 	Type              uint32
+}
+
+func virtualAllocRemote(h windows.Handle, size uintptr, protect uint32) (uintptr, error) {
+	const (
+		memCommit  = 0x1000
+		memReserve = 0x2000
+	)
+	ret, _, callErr := procVirtualAllocEx.Call(
+		uintptr(h),
+		0,
+		size,
+		uintptr(memCommit|memReserve),
+		uintptr(protect),
+	)
+	if ret == 0 {
+		return 0, callErr
+	}
+	return ret, nil
+}
+
+func createRemoteThread(h windows.Handle, startAddr uintptr, param uintptr) (windows.Handle, error) {
+	ret, _, callErr := procCreateRemoteThread.Call(
+		uintptr(h),
+		0,
+		0,
+		startAddr,
+		param,
+		0,
+		0,
+	)
+	if ret == 0 {
+		return 0, callErr
+	}
+	return windows.Handle(ret), nil
 }
 
 func virtualAllocRemoteNear(h windows.Handle, nearAddr uintptr, size uintptr) (uintptr, error) {
