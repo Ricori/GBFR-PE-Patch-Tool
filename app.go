@@ -1360,10 +1360,31 @@ var monsterPatchPoints = []monsterPatchPoint{
 		Hook:     true,
 	},
 	{
+		ID:       "monster_damage",
+		Name:     "怪物伤害",
+		RVA:      0xAA1539,
+		Original: []byte{0x29, 0xF1, 0x31, 0xD2, 0x85, 0xC9},
+		Hook:     true,
+	},
+	{
+		ID:       "crocodile_damage",
+		Name:     "鳄鱼多倍血(鳄鱼需单独设置)",
+		RVA:      0x23FD449,
+		Original: []byte{0x01, 0xBE, 0xB8, 0x15, 0x00, 0x00, 0x48, 0x8D, 0x8E, 0xB0, 0xFE, 0xFF, 0xFF, 0x8B, 0x46, 0x10},
+		Hook:     true,
+	},
+	{
 		ID:       "monster_stun",
 		Name:     "怪物多倍昏厥条",
 		RVA:      0xA09ADF,
 		Original: []byte{0xC4, 0xC1, 0x4A, 0x58, 0x85, 0x20, 0x07, 0x00, 0x00},
+		Hook:     true,
+	},
+	{
+		ID:       "overdrive_state",
+		Name:     "怪物 Overdrive 状态",
+		RVA:      0x1F7123F,
+		Original: []byte{0x49, 0x8B, 0x8C, 0x24, 0x38, 0x03, 0x00, 0x00, 0x48, 0x8B, 0x01},
 		Hook:     true,
 	},
 	{
@@ -1412,18 +1433,31 @@ func (a *App) MonsterEnhanceSetPatchValueEnabled(id string, enabled bool, hpMult
 	if id == "" {
 		return MonsterEnhanceResult{}, fmt.Errorf("怪物增强项目为空")
 	}
-	point := findMonsterPatchPoint(id)
-	if id != "all" && point == nil {
+	pointID := id
+	applyOnce := false
+	if id == "overdrive_state_apply" {
+		pointID = "overdrive_state"
+		applyOnce = true
+	}
+	point := findMonsterPatchPoint(pointID)
+	if pointID != "all" && point == nil {
 		return MonsterEnhanceResult{}, fmt.Errorf("未知怪物增强项目: %s", id)
 	}
-	if enabled && point != nil && (point.ID == "monster_hp" || point.ID == "monster_stun") && (math.IsNaN(hpMultiplier) || math.IsInf(hpMultiplier, 0) || hpMultiplier <= 0 || hpMultiplier > 9999) {
-		return MonsterEnhanceResult{}, fmt.Errorf("怪物倍血请输入 0 到 9999 之间的数值")
+	if enabled && point != nil && needsMonsterValue(point.ID) && (math.IsNaN(hpMultiplier) || math.IsInf(hpMultiplier, 0) || hpMultiplier <= 0 || hpMultiplier > 9999) {
+		return MonsterEnhanceResult{}, fmt.Errorf("怪物倍率请输入 0 到 9999 之间的数值")
+	}
+	if enabled && point != nil && point.ID == "overdrive_state" && (math.IsNaN(hpMultiplier) || math.IsInf(hpMultiplier, 0) || (hpMultiplier != 1 && hpMultiplier != 4 && hpMultiplier != 9)) {
+		return MonsterEnhanceResult{}, fmt.Errorf("Overdrive 状态请选择 1、4 或自动OD")
 	}
 
 	if enabled {
-		command := id
-		if point != nil && (point.ID == "monster_hp" || point.ID == "monster_stun") {
-			command = fmt.Sprintf("%s %.8g", id, 1/hpMultiplier)
+		command := pointID
+		if point != nil && needsMonsterValue(point.ID) {
+			commandValue := hpMultiplier
+			if point.ID == "monster_hp" || point.ID == "monster_stun" || point.ID == "crocodile_damage" {
+				commandValue = 1 / hpMultiplier
+			}
+			command = fmt.Sprintf("%s %.8g", command, commandValue)
 		}
 		dllPath, err := extractPatchCoreDLL(command)
 		if err != nil {
@@ -1432,7 +1466,22 @@ func (a *App) MonsterEnhanceSetPatchValueEnabled(id string, enabled bool, hpMult
 		if err := injectDLL(a.hProcess, dllPath); err != nil {
 			return MonsterEnhanceResult{}, fmt.Errorf("注入怪物增强 DLL 失败: %w", err)
 		}
-		status, err := a.waitMonsterEnhanceApplied(id, dllPath)
+		if applyOnce {
+			if _, err := a.waitMonsterEnhanceApplied(pointID, dllPath); err != nil {
+				return MonsterEnhanceResult{}, err
+			}
+			time.Sleep(150 * time.Millisecond)
+			if err := a.restoreMonsterEnhance(pointID); err != nil {
+				return MonsterEnhanceResult{}, err
+			}
+			status, err := a.readMonsterEnhanceStatus(dllPath)
+			if err != nil {
+				return MonsterEnhanceResult{}, err
+			}
+			status.Injected = true
+			return status, nil
+		}
+		status, err := a.waitMonsterEnhanceApplied(pointID, dllPath)
 		if err != nil {
 			return MonsterEnhanceResult{}, err
 		}
@@ -1549,6 +1598,13 @@ func (a *App) restoreMonsterEnhance(id string) error {
 		if err := writeCodeMemory(a.hProcess, addr, point.Original); err != nil {
 			return fmt.Errorf("恢复%s失败: %w", point.Name, err)
 		}
+		if point.ID == "crocodile_damage" {
+			no1hpAddr := a.moduleBase + 0x23FD463
+			no1hpOrig := []byte{0x83, 0xF8, 0x02, 0xBA, 0x01, 0x00, 0x00, 0x00, 0x0F, 0x4D, 0xD0}
+			if err := writeCodeMemory(a.hProcess, no1hpAddr, no1hpOrig); err != nil {
+				return fmt.Errorf("恢复鳄鱼多倍血1HP保底失败: %w", err)
+			}
+		}
 	}
 	return nil
 }
@@ -1566,6 +1622,10 @@ func isMonsterPatchBytesAtRVA(rva uintptr, data []byte) bool {
 		}
 	}
 	return false
+}
+
+func needsMonsterValue(id string) bool {
+	return id == "monster_hp" || id == "monster_stun" || id == "monster_damage" || id == "crocodile_damage" || id == "overdrive_state"
 }
 
 func findMonsterPatchPoint(id string) *monsterPatchPoint {

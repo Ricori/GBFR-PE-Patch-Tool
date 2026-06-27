@@ -6,7 +6,8 @@ const emit = defineEmits(['status'])
 
 const loading = ref(false)
 const result = reactive({ pid: 0, dllPath: '', injected: false, enabled: false, currentBytes: '', items: [] })
-const multipliers = reactive({ monster_hp: '10', monster_stun: '10' })
+const multipliers = reactive({ monster_hp: '10', monster_stun: '10', monster_damage: '1', crocodile_damage: '1' })
+const overdriveState = ref('1')
 
 function applyResult(res) {
   const previous = new Map((result.items || []).map(item => [item.id, item]))
@@ -27,22 +28,47 @@ function refreshStatus() {
     .finally(() => { loading.value = false })
 }
 
+function needsMultiplier(item) {
+  return item.id === 'monster_hp' || item.id === 'monster_stun' || item.id === 'monster_damage' || item.id === 'crocodile_damage'
+}
+
+function needsOverdriveState(item) {
+  return item.id === 'overdrive_state'
+}
+
+function multiplierHint(item) {
+  if (item.id === 'monster_hp') return '输入 10 = 怪物10倍血'
+  if (item.id === 'monster_stun') return '输入 10 = 怪物10倍昏厥条'
+  if (item.id === 'monster_damage') return '输入 32 = 怪物伤害32倍'
+  if (item.id === 'crocodile_damage') return '输入 10 = 鳄鱼10倍血'
+  return ''
+}
+
 function getMultiplier(item) {
   return parseFloat(multipliers[item.id] || '10')
 }
 
-function setOne(item, enabled) {
-  if (enabled && (item.id === 'monster_hp' || item.id === 'monster_stun')) {
+function patchValue(item) {
+  return needsOverdriveState(item) ? parseInt(overdriveState.value, 10) : (needsMultiplier(item) ? getMultiplier(item) : 0)
+}
+
+function setOne(item, enabled, id = item.id) {
+  if (enabled && needsMultiplier(item)) {
     const v = getMultiplier(item)
     if (isNaN(v) || v <= 0 || v > 9999) { emit('status', '倍率请输入 0 到 9999 之间的数值', 'error'); return }
+  }
+  if (enabled && needsOverdriveState(item)) {
+    const v = patchValue(item)
+    if (![1, 4, 9].includes(v)) { emit('status', 'Overdrive 状态请选择 1、4 或自动OD', 'error'); return }
   }
   const previous = item.enabled
   item.enabled = enabled
   loading.value = true
-  MonsterEnhanceSetPatchValueEnabled(item.id, enabled, (item.id === 'monster_hp' || item.id === 'monster_stun') ? getMultiplier(item) : 0)
+  MonsterEnhanceSetPatchValueEnabled(id, enabled, patchValue(item))
     .then((res) => {
       applyResult(res)
-      emit('status', `${item.name}${enabled ? '已开启' : '已关闭'}`, 'success')
+      const verb = id === 'overdrive_state_apply' ? '已应用' : (enabled ? '已开启' : '已关闭')
+      emit('status', `${item.name}${verb}`, 'success')
     })
     .catch((err) => {
       item.enabled = previous
@@ -78,11 +104,24 @@ refreshStatus()
           <span class="state" :class="{ on: item.enabled }">{{ item.enabled ? '开启' : '关闭' }}</span>
           <span class="memory-hint">RVA: 0x{{ Number(item.rva).toString(16).toUpperCase() }}</span>
         </div>
-        <div v-if="item.id === 'monster_hp' || item.id === 'monster_stun'" class="memory-row">
+        <div v-if="needsMultiplier(item)" class="memory-row">
           <input v-model="multipliers[item.id]" type="number" min="0.1" max="9999" step="0.1" class="batch-input" placeholder="倍率" />
-          <span class="memory-hint">{{ item.id === 'monster_hp' ? '输入 10 = 怪物10倍血' : '输入 10 = 怪物10倍昏厥条' }}</span>
+          <span class="memory-hint">{{ multiplierHint(item) }}</span>
         </div>
-        <div class="memory-row">
+        <div v-if="needsOverdriveState(item)" class="memory-row">
+          <select v-model="overdriveState" class="batch-input od-select">
+            <option value="1">1 满红条</option>
+            <option value="4">4 满黄条</option>
+            <option value="9">自动OD</option>
+          </select>
+          <span class="memory-hint">锁定=持续写入；自动OD=非红条时写一次满黄条</span>
+        </div>
+        <div class="memory-row" v-if="needsOverdriveState(item)">
+          <button class="btn-batch" @click="setOne(item, true)" :disabled="loading || item.enabled">锁定</button>
+          <button class="btn-batch" @click="setOne(item, true, 'overdrive_state_apply')" :disabled="loading || overdriveState === '9'">应用</button>
+          <button class="btn-refresh" @click="setOne(item, false)" :disabled="loading || !item.enabled">关闭</button>
+        </div>
+        <div class="memory-row" v-else>
           <button class="btn-batch" @click="setOne(item, true)" :disabled="loading || item.enabled">开启</button>
           <button class="btn-refresh" @click="setOne(item, false)" :disabled="loading || !item.enabled">关闭</button>
         </div>
@@ -123,6 +162,7 @@ refreshStatus()
 .memory-title { font-size:0.8rem; font-weight:600; color:rgba(255,255,255,0.62); }
 .memory-hint, .memory-info { font-size:0.68rem; color:rgba(255,255,255,0.32); }
 .batch-input { width:80px; padding:6px 10px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.07); color:#fff; font-size:0.82rem; outline:none; }
+.od-select { width:120px; }
 .memory-bytes { font-size:0.66rem; color:rgba(255,255,255,0.24); font-family:'Courier New',monospace; word-break:break-all; }
 .btn-batch, .btn-refresh {
   padding:6px 14px; border-radius:6px; font-size:0.78rem; font-weight:600; cursor:pointer;
