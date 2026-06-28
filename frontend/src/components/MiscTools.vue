@@ -3,6 +3,7 @@ import { reactive, ref } from 'vue'
 import { CharaAttach, CharaDetach,
          CountdownGetStatus, CountdownScan, CountdownSet,
          FaceAccessoryGetStatus, FaceAccessoryScan, FaceAccessorySetHidden,
+         InfiniteChallengeGetStatus, InfiniteChallengeSetEnabled,
          OtherSkinPurpleRuneGetStatus, OtherSkinPurpleRuneSetEnabled,
          GetAppVersion, CheckUpdate, OpenReleasePage } from '../../wailsjs/go/main/App'
 
@@ -17,6 +18,8 @@ const countdownStatus = reactive({ found: false, address: 0, rva: 0, value1: 0, 
 const countdownLoading = ref(false)
 const faceAccessoryStatus = reactive({ found: false, address: 0, rva: 0, hidden: false, jumpOpcode: '', currentBytes: '' })
 const faceAccessoryLoading = ref(false)
+const infiniteChallengeStatus = reactive({ rva: 0, enabled: false, currentBytes: '' })
+const infiniteChallengeLoading = ref(false)
 const otherSkinPurpleRuneStatus = reactive({ rva: 0, enabled: false, jumpOpcode: '', currentBytes: '' })
 const otherSkinPurpleRuneLoading = ref(false)
 const updateInfo = reactive({ currentVersion: 'v1.5.0', latestVersion: '', hasUpdate: false, releaseUrl: '', body: '', assets: [] })
@@ -32,6 +35,7 @@ function connect() {
       Object.assign(info, res)
       loadCountdownStatus()
       loadFaceAccessoryStatus()
+      loadInfiniteChallengeStatus()
       loadOtherSkinPurpleRuneStatus()
     })
     .catch((err) => emit('status', String(err), 'error'))
@@ -45,6 +49,7 @@ function disconnect() {
       Object.assign(info, { pid: 0, moduleBase: 0, manager: 0 })
       Object.assign(countdownStatus, { found: false, address: 0, rva: 0, value1: 0, value2: 0, currentBytes: '' })
       Object.assign(faceAccessoryStatus, { found: false, address: 0, rva: 0, hidden: false, jumpOpcode: '', currentBytes: '' })
+      Object.assign(infiniteChallengeStatus, { rva: 0, enabled: false, currentBytes: '' })
       Object.assign(otherSkinPurpleRuneStatus, { rva: 0, enabled: false, jumpOpcode: '', currentBytes: '' })
     })
     .catch((err) => emit('status', String(err), 'error'))
@@ -123,6 +128,28 @@ function setFaceAccessoryHidden(hidden) {
     .then((status) => { applyFaceAccessoryStatus(status); emit('status', hidden ? '已隐藏脸部符文' : '已恢复脸部符文显示', 'success') })
     .catch((err) => emit('status', String(err), 'error'))
     .finally(() => { faceAccessoryLoading.value = false })
+}
+
+function applyInfiniteChallengeStatus(status) {
+  Object.assign(infiniteChallengeStatus, status || { rva: 0, enabled: false, currentBytes: '' })
+}
+
+function loadInfiniteChallengeStatus() {
+  if (!connected.value) return
+  infiniteChallengeLoading.value = true
+  InfiniteChallengeGetStatus()
+    .then(applyInfiniteChallengeStatus)
+    .catch((err) => emit('status', String(err), 'error'))
+    .finally(() => { infiniteChallengeLoading.value = false })
+}
+
+function setInfiniteChallengeEnabled(enabled) {
+  if (!connected.value) { emit('status', '请先连接游戏进程', 'error'); return }
+  infiniteChallengeLoading.value = true
+  InfiniteChallengeSetEnabled(enabled)
+    .then((status) => { applyInfiniteChallengeStatus(status); emit('status', enabled ? '已开启无限挑战' : '已恢复挑战次数递增', 'success') })
+    .catch((err) => emit('status', String(err), 'error'))
+    .finally(() => { infiniteChallengeLoading.value = false })
 }
 
 function applyOtherSkinPurpleRuneStatus(status) {
@@ -236,6 +263,23 @@ function openReleasePage() {
             <button class="btn-sort" @click="scanFaceAccessory" :disabled="faceAccessoryLoading">重新扫描</button>
           </div>
           <div class="memory-bytes">{{ faceAccessoryStatus.currentBytes || '未定位' }}</div>
+        </div>
+
+        <div class="memory-card">
+          <div class="memory-header">
+            <span class="memory-title">无限挑战</span>
+            <span class="memory-hint">NOP 挑战次数递增</span>
+          </div>
+          <div class="memory-info">
+            <span>RVA: {{ formatHex(infiniteChallengeStatus.rva) }}</span>
+            <span>状态: {{ infiniteChallengeStatus.enabled ? '开启' : '默认' }}</span>
+          </div>
+          <div class="memory-row">
+            <button class="btn-batch" @click="setInfiniteChallengeEnabled(true)" :disabled="infiniteChallengeLoading || infiniteChallengeStatus.enabled">开启无限挑战</button>
+            <button class="btn-refresh" @click="setInfiniteChallengeEnabled(false)" :disabled="infiniteChallengeLoading || !infiniteChallengeStatus.enabled">恢复默认</button>
+            <button class="btn-refresh" @click="loadInfiniteChallengeStatus" :disabled="infiniteChallengeLoading">刷新</button>
+          </div>
+          <div class="memory-bytes">{{ infiniteChallengeStatus.currentBytes || '未读取' }}</div>
         </div>
 
         <div class="memory-card">

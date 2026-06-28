@@ -1134,6 +1134,59 @@ func (a *App) readFaceAccessoryStatus(addr uintptr) (FaceAccessoryStatus, error)
 	}, nil
 }
 
+// ── 无限挑战 (运行时 NOP 挑战次数递增) ──
+
+type InfiniteChallengeStatus struct {
+	RVA          uint64 `json:"rva"`
+	Enabled      bool   `json:"enabled"`
+	CurrentBytes string `json:"currentBytes"`
+}
+
+const infiniteChallengeRVA = uintptr(0x278A6DE)
+
+var (
+	infiniteChallengeOrig  = []byte{0xFF, 0xC2}
+	infiniteChallengePatch = []byte{0x90, 0x90}
+)
+
+func (a *App) InfiniteChallengeGetStatus() (InfiniteChallengeStatus, error) {
+	if err := a.ensureGameProcess(); err != nil {
+		return InfiniteChallengeStatus{}, err
+	}
+	return a.readInfiniteChallengeStatus()
+}
+
+func (a *App) InfiniteChallengeSetEnabled(enabled bool) (InfiniteChallengeStatus, error) {
+	if err := a.ensureGameProcess(); err != nil {
+		return InfiniteChallengeStatus{}, err
+	}
+	patch := infiniteChallengeOrig
+	if enabled {
+		patch = infiniteChallengePatch
+	}
+	addr := a.moduleBase + infiniteChallengeRVA
+	if err := writeCodeMemory(a.hProcess, addr, patch); err != nil {
+		return InfiniteChallengeStatus{}, fmt.Errorf("写入无限挑战失败: %w", err)
+	}
+	return a.readInfiniteChallengeStatus()
+}
+
+func (a *App) readInfiniteChallengeStatus() (InfiniteChallengeStatus, error) {
+	addr := a.moduleBase + infiniteChallengeRVA
+	buf := make([]byte, len(infiniteChallengeOrig))
+	if err := readProcessMemory(a.hProcess, addr, unsafe.Pointer(&buf[0]), uintptr(len(buf))); err != nil {
+		return InfiniteChallengeStatus{}, fmt.Errorf("读取无限挑战指令失败: %w", err)
+	}
+	if !bytesEqual(buf, infiniteChallengeOrig) && !bytesEqual(buf, infiniteChallengePatch) {
+		return InfiniteChallengeStatus{}, fmt.Errorf("无限挑战指令字节异常: %s", bytesToHex(buf))
+	}
+	return InfiniteChallengeStatus{
+		RVA:          uint64(infiniteChallengeRVA),
+		Enabled:      bytesEqual(buf, infiniteChallengePatch),
+		CurrentBytes: bytesToHex(buf),
+	}, nil
+}
+
 // ── 其他皮肤紫色符文显示 (运行时 JNE/JE 切换) ──
 
 type OtherSkinPurpleRuneStatus struct {
