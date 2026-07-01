@@ -22277,7 +22277,7 @@
             "displayName": "Untouchable+",
             "category": "special_sigil",
             "isPlusSigil": true,
-            "supportsSecondaryTrait": false,
+            "supportsSecondaryTrait": true,
             "allowedSigilLevels": [
                 15
             ],
@@ -26391,7 +26391,7 @@
             "displayName": "Spartan Echo+",
             "category": null,
             "isPlusSigil": null,
-            "supportsSecondaryTrait": false,
+            "supportsSecondaryTrait": true,
             "allowedSigilLevels": [
                 15
             ],
@@ -26417,7 +26417,7 @@
             "displayName": "Super Ultimate Perfect Dodge+",
             "category": null,
             "isPlusSigil": null,
-            "supportsSecondaryTrait": false,
+            "supportsSecondaryTrait": true,
             "allowedSigilLevels": [
                 15
             ],
