@@ -515,14 +515,10 @@ static bool PatchStunHook(lm_address_t target, wchar_t* message, size_t messageS
     lm_byte_t code[64]{};
     size_t i = 0;
     code[i++] = 0x50;                                                                               // push rax
-    code[i++] = 0x48; code[i++] = 0x83; code[i++] = 0xEC; code[i++] = 0x20;                         // sub rsp,20
-    code[i++] = 0x0F; code[i++] = 0x11; code[i++] = 0x34; code[i++] = 0x24;                         // movups [rsp],xmm6
+    code[i++] = 0x49; code[i++] = 0x8D; code[i++] = 0x85; code[i++] = 0x20; code[i++] = 0x07; code[i++] = 0x00; code[i++] = 0x00; // lea rax,[r13+720]
     code[i++] = 0xF3; code[i++] = 0x0F; code[i++] = 0x59; code[i++] = 0x35;                         // mulss xmm6,[rip+disp32]
     size_t scaleDisp = i; i += 4;
-    code[i++] = 0x49; code[i++] = 0x8D; code[i++] = 0x85; code[i++] = 0x20; code[i++] = 0x07; code[i++] = 0x00; code[i++] = 0x00; // lea rax,[r13+720]
     code[i++] = 0xC5; code[i++] = 0xCA; code[i++] = 0x58; code[i++] = 0x00;                         // vaddss xmm0,xmm6,[rax]
-    code[i++] = 0x0F; code[i++] = 0x10; code[i++] = 0x34; code[i++] = 0x24;                         // movups xmm6,[rsp]
-    code[i++] = 0x48; code[i++] = 0x83; code[i++] = 0xC4; code[i++] = 0x20;                         // add rsp,20
     code[i++] = 0x58;                                                                               // pop rax
     code[i++] = 0xE9;                                                                               // jmp return
     size_t jmpBackDisp = i; i += 4;
