@@ -43,3 +43,6 @@
 
 # Local notes
 /src_dll/todo.txt
+
+#Git Bash/MSYS
+*.stackdump

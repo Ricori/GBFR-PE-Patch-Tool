@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -26,6 +27,7 @@ const (
 	wmClose          = 0x0010
 	wmDestroy        = 0x0002
 	wmPaint          = 0x000F
+	wmTimer          = 0x0113
 	wmNcHitTest      = 0x0084
 	htCaption        = 2
 	htBottomRight    = 17
@@ -38,6 +40,8 @@ const (
 	cleartypeQuality = 5
 	ffDontCare       = 0
 	fwBold           = 700
+	animationTimerID = 1
+	animationMs      = 220
 )
 
 type point struct {
@@ -77,11 +81,16 @@ type wndClassEx struct {
 }
 
 type damageOverlayWindow struct {
-	mu       sync.Mutex
-	hwnd     syscall.Handle
-	value    uint64
-	fontSize int
-	ready    chan error
+	mu           sync.Mutex
+	hwnd         syscall.Handle
+	value        uint64
+	displayValue float64
+	startValue   float64
+	targetValue  float64
+	fontSize     int
+	animStart    time.Time
+	animating    bool
+	ready        chan error
 }
 
 var damageOverlayProc = syscall.NewCallback(damageOverlayWndProc)
@@ -101,6 +110,8 @@ var (
 	procDispatchMessageW = user32.NewProc("DispatchMessageW")
 	procPostQuitMessage  = user32.NewProc("PostQuitMessage")
 	procPostMessageW     = user32.NewProc("PostMessageW")
+	procSetTimer         = user32.NewProc("SetTimer")
+	procKillTimer        = user32.NewProc("KillTimer")
 	procInvalidateRect   = user32.NewProc("InvalidateRect")
 	procGetClientRect    = user32.NewProc("GetClientRect")
 	procScreenToClient   = user32.NewProc("ScreenToClient")
@@ -173,10 +184,23 @@ func (o *damageOverlayWindow) stop() {
 
 func (o *damageOverlayWindow) setValue(value uint64) {
 	o.mu.Lock()
+	if o.value == value {
+		hwnd := o.hwnd
+		o.mu.Unlock()
+		if hwnd != 0 {
+			procInvalidateRect.Call(uintptr(hwnd), 0, 1)
+		}
+		return
+	}
 	o.value = value
+	o.startValue = o.displayValue
+	o.targetValue = float64(value)
+	o.animStart = time.Now()
+	o.animating = true
 	hwnd := o.hwnd
 	o.mu.Unlock()
 	if hwnd != 0 {
+		procSetTimer.Call(uintptr(hwnd), animationTimerID, 16, 0)
 		procInvalidateRect.Call(uintptr(hwnd), 0, 1)
 	}
 }
@@ -260,6 +284,11 @@ func damageOverlayWndProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintpt
 	case wmPaint:
 		paintDamageOverlay(hwnd)
 		return 0
+	case wmTimer:
+		if activeDamageOverlay != nil {
+			activeDamageOverlay.updateAnimation(hwnd)
+		}
+		return 0
 	case wmClose:
 		procDefWindowProcW.Call(uintptr(hwnd), uintptr(msg), wParam, lParam)
 		return 0
@@ -274,6 +303,29 @@ func damageOverlayWndProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintpt
 	}
 	ret, _, _ := procDefWindowProcW.Call(uintptr(hwnd), uintptr(msg), wParam, lParam)
 	return ret
+}
+
+func (o *damageOverlayWindow) updateAnimation(hwnd syscall.Handle) {
+	o.mu.Lock()
+	if !o.animating {
+		o.mu.Unlock()
+		procKillTimer.Call(uintptr(hwnd), animationTimerID)
+		return
+	}
+	elapsed := time.Since(o.animStart)
+	if elapsed >= animationMs*time.Millisecond {
+		o.displayValue = o.targetValue
+		o.animating = false
+		o.mu.Unlock()
+		procKillTimer.Call(uintptr(hwnd), animationTimerID)
+		procInvalidateRect.Call(uintptr(hwnd), 0, 1)
+		return
+	}
+	t := float64(elapsed) / float64(animationMs*time.Millisecond)
+	t = 1 - (1-t)*(1-t)*(1-t)
+	o.displayValue = o.startValue + (o.targetValue-o.startValue)*t
+	o.mu.Unlock()
+	procInvalidateRect.Call(uintptr(hwnd), 0, 1)
 }
 
 func paintDamageOverlay(hwnd syscall.Handle) {
@@ -294,7 +346,11 @@ func paintDamageOverlay(hwnd syscall.Handle) {
 	fontSize := 48
 	if activeDamageOverlay != nil {
 		activeDamageOverlay.mu.Lock()
-		value = activeDamageOverlay.value
+		if activeDamageOverlay.displayValue <= 0 {
+			value = activeDamageOverlay.value
+		} else {
+			value = uint64(activeDamageOverlay.displayValue + 0.5)
+		}
 		fontSize = activeDamageOverlay.fontSize
 		activeDamageOverlay.mu.Unlock()
 	}

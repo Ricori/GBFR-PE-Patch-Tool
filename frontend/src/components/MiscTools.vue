@@ -434,11 +434,11 @@ onBeforeUnmount(() => {
         <div class="memory-card" :class="{ active: damageMeterStatus.connected && damageMeterStatus.totalDamage > 0 }">
           <div class="memory-header">
             <span class="memory-title">团队伤害记录</span>
-            <span class="memory-hint">基于怪物实际扣血点</span>
+            <span class="memory-hint">依赖怪物增强中倍率血量，本功能自动开启默认1倍</span>
           </div>
           <div class="memory-info damage-meter-info">
             <span>状态: {{ damageMeterStatus.connected ? '记录中' : '等待共享内存' }}</span>
-            <span>需先开启怪物多倍血或鳄鱼多倍血 hook</span>
+            <span>原始扣血点会按怪物增强倍率折算显示</span>
           </div>
           <div class="damage-meter-value">{{ formatDamage(displayDamage()) }}</div>
           <div class="damage-meter-raw">原始: {{ formatDamage(damageMeterStatus.totalDamage) }}</div>
