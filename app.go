@@ -24,7 +24,7 @@ const (
 	steamAppID  = "881020"
 	gameExeName = "granblue_fantasy_relink.exe"
 	gameFolder  = "Granblue Fantasy Relink"
-	appVersion  = "v1.6.5"
+	appVersion  = "v1.6.6"
 	repoOwner   = "BitterG"
 	repoName    = "GBFR-PE-Patch-Tool"
 )
@@ -114,6 +114,9 @@ type App struct {
 	charaPID            uint32
 	countdownAddr       uintptr
 	faceAccessoryAddr   uintptr
+	overLimitHookAddr   uintptr
+	overLimitCaveAddr   uintptr
+	overLimitCommitAddr uintptr
 	unlockAllTrophyAddr uintptr
 	terminusDropAddr    uintptr
 	damageMeterMapping  windows.Handle
@@ -951,6 +954,9 @@ func (a *App) CharaDetach() {
 	a.charaPID = 0
 	a.countdownAddr = 0
 	a.faceAccessoryAddr = 0
+	a.overLimitHookAddr = 0
+	a.overLimitCaveAddr = 0
+	a.overLimitCommitAddr = 0
 	a.unlockAllTrophyAddr = 0
 	a.terminusDropAddr = 0
 }
