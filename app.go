@@ -1908,8 +1908,8 @@ var monsterPatchPoints = []monsterPatchPoint{
 	{
 		ID:       "monster_hp",
 		Name:     "怪物多倍血",
-		RVA:      0x1B3F798,
-		Original: []byte{0x01, 0x91, 0xB8, 0x15, 0x00, 0x00},
+		RVA:      0x1F7A820,
+		Original: []byte{0x48, 0x8B, 0x41, 0x10, 0x45, 0x31, 0xC9},
 		Hook:     true,
 	},
 	{
@@ -2142,7 +2142,7 @@ func (a *App) waitMonsterEnhanceApplied(id string, dllPath string) (MonsterEnhan
 			if err != nil {
 				return MonsterEnhanceResult{}, err
 			}
-			return last, nil
+			return MonsterEnhanceResult{}, fmt.Errorf("怪物增强 Hook 未写入目标地址")
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -2182,8 +2182,6 @@ func (a *App) readMonsterEnhanceStatus(dllPath string) (MonsterEnhanceResult, er
 		}
 		if enabled {
 			patched++
-		} else if !bytesEqual(current, point.Original) && !isMonsterPatchBytesAtRVA(point.RVA, current) {
-			return MonsterEnhanceResult{}, fmt.Errorf("%s指令字节未知: %s", point.Name, currentHex)
 		}
 		items = append(items, MonsterEnhanceItem{
 			ID:           point.ID,
