@@ -32,6 +32,11 @@ async function load(path) {
   }
 }
 
+async function refresh() {
+  await scanSaves()
+  if (savePath.value) await load(savePath.value)
+}
+
 onMounted(scanSaves)
 </script>
 
@@ -40,21 +45,20 @@ onMounted(scanSaves)
     <div class="section">
       <div class="header">
         <span class="title">角色次数统计</span>
-        <span class="hint">显示存档 40 个角色槽位任务次数</span>
+        <span class="hint">显示存档角色任务次数（目前芙劳缺失）</span>
       </div>
       <div class="slots">
         <button v-for="s in slots" :key="s.index" class="slot-btn"
           :class="{ on: savePath === s.path }" @click="load(s.path)">
           {{ s.name }}
         </button>
-        <button class="btn-refresh" @click="scanSaves">刷新存档</button>
+        <button class="btn-refresh" @click="refresh">刷新</button>
       </div>
 
       <div v-if="loading" class="empty">解析中...</div>
       <div v-else-if="error" class="empty">{{ error }}</div>
       <template v-else-if="list.length">
         <div class="batch-row">
-          <button class="btn-refresh" @click="load(savePath)">刷新</button>
           <button class="btn-sort" @click="sortDesc = !sortDesc">
             {{ sortDesc ? '恢复原序' : '按次数排序' }}
           </button>

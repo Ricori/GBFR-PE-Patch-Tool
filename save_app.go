@@ -230,13 +230,12 @@ func characterStatsForSave(data *SaveDataBinary) []CharacterStat {
 		}
 	}
 
-	stats := make([]CharacterStat, 0, 40)
-	for slot := uint32(0); slot < 40; slot++ {
-		name := fmt.Sprintf("槽位 %d", slot)
-		if slot < uint32(len(characterNames)) && characterNames[slot] != "" {
-			name = characterNames[slot]
+	stats := make([]CharacterStat, 0, len(characterNames))
+	for slot, name := range characterNames {
+		if name == "" {
+			continue
 		}
-		stats = append(stats, CharacterStat{Name: name, Count: counts[slot]})
+		stats = append(stats, CharacterStat{Name: name, Count: counts[uint32(slot)]})
 	}
 	return stats
 }
