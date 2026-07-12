@@ -10,6 +10,9 @@
     { "hash": "0x2FFB509F", "displayName": "能力伤害上限" },
     { "hash": "0xA3539FBB", "displayName": "奥义伤害上限" },
     { "hash": "0xA66241C9", "displayName": "普通攻击伤害上限" },
-    { "hash": "0xBC4E92CB", "displayName": "HP" }
+    { "hash": "0xBC4E92CB", "displayName": "HP" },
+    {"hash":"CE70C58A", "displayName":"能力伤害上限 max 100%"},
+    {"hash":"9245DFA4", "displayName":"普通攻击伤害上限 max 100%"},
+    {"hash":"5A1D2C89", "displayName":"奥义伤害上限 max 100%"}
   ]
 }
