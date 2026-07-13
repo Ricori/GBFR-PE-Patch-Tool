@@ -614,6 +614,23 @@
                        "confidence":  "medium"
                    },
                    {
+                       "internalId":  "SKILL_087_00",
+                       "hash":  "0xB6E31F76",
+                       "displayName":  "Firm Stance",
+                       "category":  "support_trait",
+                       "maxLevel":  15,
+                       "allowedLevels":  null,
+                       "observedLevels":  [
+                                              15
+                                          ],
+                       "canAppearAsPrimary":  true,
+                       "canAppearAsSecondary":  true,
+                       "bannedAsSecondaryOnPlusSigils":  false,
+                       "notes":  "Copied from factor trait catalog so wrightstone generation can select Firm Stance in any trait slot.",
+                       "source":  "data/traits.json SKILL_087_00",
+                       "confidence":  "medium"
+                   },
+                   {
                        "internalId":  "SKILL_094_00",
                        "hash":  "0x0053599E",
                        "displayName":  "Steady Focus",
