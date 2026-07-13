@@ -614,6 +614,23 @@
                        "confidence":  "medium"
                    },
                    {
+                       "internalId":  "SKILL_094_00",
+                       "hash":  "0x0053599E",
+                       "displayName":  "Steady Focus",
+                       "category":  "support_trait",
+                       "maxLevel":  15,
+                       "allowedLevels":  null,
+                       "observedLevels":  [
+                                              15
+                                          ],
+                       "canAppearAsPrimary":  true,
+                       "canAppearAsSecondary":  true,
+                       "bannedAsSecondaryOnPlusSigils":  false,
+                       "notes":  "Copied from factor trait catalog so wrightstone generation can select Steady Focus in any trait slot.",
+                       "source":  "data/traits.json SKILL_094_00",
+                       "confidence":  "medium"
+                   },
+                   {
                        "internalId":  "SKILL_096_00",
                        "hash":  "0x1470F860",
                        "displayName":  "Steel Nerves",
