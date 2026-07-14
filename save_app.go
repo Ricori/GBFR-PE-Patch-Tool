@@ -201,8 +201,8 @@ func (a *App) LoadSave(path string) (*SaveSummary, error) {
 	return s, nil
 }
 
-// GetCharacterStats reads character-use counters from 40 save character slots.
-func (a *App) GetCharacterStats(path string) ([]CharacterStat, error) {
+// GetCharacterStats reads character-use counters from save character slots.
+func (a *App) GetCharacterStats(path string, newSave bool) ([]CharacterStat, error) {
 	save, err := LoadSaveFile(path)
 	if err != nil {
 		return nil, err
@@ -210,22 +210,33 @@ func (a *App) GetCharacterStats(path string) ([]CharacterStat, error) {
 	if save.SlotData == nil {
 		return nil, fmt.Errorf("存档SlotData为空")
 	}
-	return characterStatsForSave(save.SlotData), nil
+	return characterStatsForSave(save.SlotData, newSave), nil
 }
 
-func characterStatsForSave(data *SaveDataBinary) []CharacterStat {
+func characterStatsForSave(data *SaveDataBinary, newSave bool) []CharacterStat {
 	const firstCharacterSlot uint32 = 10000
 
-	characterNames := [...]string{
+	oldCharacterNames := [...]string{
 		"古兰", "姬塔", "卡塔莉娜", "拉卡姆", "伊欧", "欧根", "", "萝赛塔", "冈达葛萨", "菲莉",
 		"兰斯洛特", "巴恩", "珀西瓦尔", "", "齐格飞", "夏洛特", "索恩", "尤达拉哈", "娜露梅", "伽兰查",
 		"塞达", "伊德", "巴萨拉卡", "", "卡莉奥丝特罗", "", "", "圣德芬", "希耶提", "",
 		"", "", "", "", "", "", "菲迪埃尔", "贝阿朵丽丝", "玛琪拉菲菈", "尤斯提斯",
+		"芙劳", "", "", "", "", "", "", "", "", "",
+	}
+	newCharacterNames := [...]string{
+		"古兰", "姬塔", "菲迪埃尔", "卡塔莉娜", "拉卡姆", "伊欧", "欧根", "", "萝赛塔", "冈达葛萨",
+		"菲莉", "兰斯洛特", "贝阿朵丽丝", "巴恩", "珀西瓦尔", "", "齐格飞", "夏洛特", "索恩", "尤达拉哈",
+		"娜露梅", "伽兰查", "塞达", "伊德", "巴萨拉卡", "", "卡莉奥丝特罗", "", "", "圣德芬",
+		"希耶提", "玛琪拉菲菈", "尤斯提斯", "", "芙劳", "", "", "", "", "",
+	}
+	characterNames := oldCharacterNames[:]
+	if newSave {
+		characterNames = newCharacterNames[:]
 	}
 
-	counts := make(map[uint32]int32, 40)
+	counts := make(map[uint32]int32, 41)
 	for _, unit := range data.UIntTable {
-		if unit.IDType == SaveID_CharacterQuestUse && len(unit.ValueData) > 0 && unit.UnitID >= firstCharacterSlot && unit.UnitID < firstCharacterSlot+40 {
+		if unit.IDType == SaveID_CharacterQuestUse && len(unit.ValueData) > 0 && unit.UnitID >= firstCharacterSlot && unit.UnitID < firstCharacterSlot+41 {
 			counts[unit.UnitID-firstCharacterSlot] = int32(unit.ValueData[0])
 		}
 	}
@@ -234,6 +245,7 @@ func characterStatsForSave(data *SaveDataBinary) []CharacterStat {
 	for slot, name := range characterNames {
 		if name == "" {
 			continue
+			//name = fmt.Sprintf("位置 %d", slot+1)
 		}
 		stats = append(stats, CharacterStat{Name: name, Count: counts[uint32(slot)]})
 	}

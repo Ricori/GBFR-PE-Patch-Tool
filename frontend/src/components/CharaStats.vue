@@ -7,6 +7,7 @@ const list = ref([])
 const savePath = ref('')
 const loading = ref(false)
 const sortDesc = ref(false)
+const newSave = ref(false)
 const error = ref('')
 
 const sorted = computed(() => {
@@ -23,7 +24,7 @@ async function load(path) {
   savePath.value = path
   error.value = ''
   try {
-    list.value = await GetCharacterStats(path) || []
+    list.value = await GetCharacterStats(path, newSave.value) || []
   } catch (err) {
     list.value = []
     error.value = String(err)
@@ -37,6 +38,12 @@ async function refresh() {
   if (savePath.value) await load(savePath.value)
 }
 
+function switchVersion(value) {
+  if (newSave.value === value) return
+  newSave.value = value
+  if (savePath.value) load(savePath.value)
+}
+
 onMounted(scanSaves)
 </script>
 
@@ -45,7 +52,7 @@ onMounted(scanSaves)
     <div class="section">
       <div class="header">
         <span class="title">角色次数统计</span>
-        <span class="hint">显示存档角色任务次数（目前芙劳缺失）</span>
+        <span class="hint">显示存档角色任务次数(新-DLC更新后创建的存档/旧-DLC更新前创建并转换过来的存档)</span>
       </div>
       <div class="slots">
         <button v-for="s in slots" :key="s.index" class="slot-btn"
@@ -54,15 +61,20 @@ onMounted(scanSaves)
         </button>
         <button class="btn-refresh" @click="refresh">刷新</button>
       </div>
+      <div class="version-row">
+        <span class="version-label">存档版本</span>
+        <div class="version-switch">
+          <button :class="{ on: !newSave }" @click="switchVersion(false)">旧版转换存档</button>
+          <button :class="{ on: newSave }" @click="switchVersion(true)">DLC更新后新建存档</button>
+        </div>
+        <button v-if="list.length" class="btn-sort" @click="sortDesc = !sortDesc">
+          {{ sortDesc ? '恢复原序' : '按次数排序' }}
+        </button>
+      </div>
 
       <div v-if="loading" class="empty">解析中...</div>
       <div v-else-if="error" class="empty">{{ error }}</div>
       <template v-else-if="list.length">
-        <div class="batch-row">
-          <button class="btn-sort" @click="sortDesc = !sortDesc">
-            {{ sortDesc ? '恢复原序' : '按次数排序' }}
-          </button>
-        </div>
         <div class="table">
           <div class="row row-head">
             <span class="col-name">角色</span>
@@ -86,6 +98,12 @@ onMounted(scanSaves)
 .title { font-size:0.88rem; font-weight:600; color:rgba(255,255,255,0.65); letter-spacing:1px; }
 .hint { font-size:0.68rem; color:rgba(255,255,255,0.25); text-align:right; }
 .slots { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.version-row { display:flex; align-items:center; gap:10px; }
+.version-label { font-size:0.76rem; color:rgba(255,255,255,0.4); }
+.version-switch { display:flex; border:1px solid rgba(255,255,255,0.12); border-radius:6px; overflow:hidden; }
+.version-switch button { padding:6px 10px; border:0; border-right:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.03); color:rgba(255,255,255,0.45); font-size:0.72rem; cursor:pointer; }
+.version-switch button:last-child { border-right:0; }
+.version-switch button.on { background:rgba(103,232,249,0.12); color:#67e8f9; }
 .slot-btn, .btn-refresh, .btn-sort { padding:6px 14px; border-radius:6px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.5); font-size:0.78rem; cursor:pointer; transition:background 0.2s; }
 .slot-btn { padding:8px 14px; }
 .slot-btn:hover, .btn-refresh:hover, .btn-sort:hover { background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.7); }
