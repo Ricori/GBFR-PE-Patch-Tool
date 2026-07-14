@@ -461,6 +461,21 @@
                        "confidence":  "medium"
                    },
                    {
+                       "internalId":  "SKILL_066_00",
+                       "hash":  "0x6085DA25",
+                       "displayName":  "Regen",
+                       "category":  "support_trait",
+                       "maxLevel":  15,
+                       "allowedLevels":  null,
+                       "observedLevels":  [],gi
+                       "canAppearAsPrimary":  true,
+                       "canAppearAsSecondary":  true,
+                       "bannedAsSecondaryOnPlusSigils":  false,
+                       "notes":  "Added for blessing generation with observed levels 1, 2, and 3.",
+                       "source":  "data/traits.json SKILL_066_00; user-provided game-memory observation",
+                       "confidence":  "high"
+                   },
+                   {
                        "internalId":  "SKILL_067_00",
                        "hash":  "0x7CCFF74F",
                        "displayName":  "Drain",
