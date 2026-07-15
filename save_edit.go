@@ -121,6 +121,61 @@ func (a *App) ApplyCharacterStats(inputPath, outputPath string, edits []CharaCou
 	return outputPath, nil
 }
 
+// ── 点赞数 (Commendations) ──
+
+// MaxCommendations 是游戏内部对点赞数的上限（exe 中 clamp 到 999999）。
+const MaxCommendations = 999999
+
+// ApplyCommendations 把点赞数写入新存档，返回输出文件路径。
+// 取代原先的 PE 补丁方案：补丁改的是运行时 clamp、要被点赞一次才落存档，
+// 且随游戏版本更新失效；直接写存档等价且与版本无关。
+func (a *App) ApplyCommendations(inputPath, outputPath string, value int32) (string, error) {
+	if inputPath == "" {
+		return "", fmt.Errorf("未指定存档路径")
+	}
+	if value < 0 || value > MaxCommendations {
+		return "", fmt.Errorf("点赞数需在 0 ~ %d 之间", MaxCommendations)
+	}
+	if outputPath == "" {
+		outputPath = defaultModifiedPath(inputPath)
+	}
+
+	sd, err := LoadSave(inputPath)
+	if err != nil {
+		return "", err
+	}
+
+	if err := sd.patchInt(SaveID_Commendations, 0, int(value)); err != nil {
+		return "", fmt.Errorf("找不到点赞数据 (IDType=%d): %w", SaveID_Commendations, err)
+	}
+
+	if err := sd.FixChecksums(); err != nil {
+		return "", fmt.Errorf("重算校验和失败: %w", err)
+	}
+	if err := sd.Write(outputPath); err != nil {
+		return "", err
+	}
+
+	// 回读验证：写入走的是 LoadSave 的字节扫描定位，这里用 LoadSaveFile 的
+	// FlatBuffer 解析回读，两套解析器交叉校验，避免写到错误的偏移而无人察觉。
+	verify, err := LoadSaveFile(outputPath)
+	if err != nil {
+		return "", fmt.Errorf("回读验证失败: %w", err)
+	}
+	if verify.SlotData == nil {
+		return "", fmt.Errorf("回读验证失败: 输出存档 SlotData 为空")
+	}
+	unit := verify.SlotData.GetIntUnit(SaveID_Commendations)
+	if unit == nil || len(unit.ValueData) == 0 {
+		return "", fmt.Errorf("回读验证失败: 输出存档中找不到点赞数据")
+	}
+	if unit.ValueData[0] != value {
+		return "", fmt.Errorf("回读验证失败: 期望 %d, 实际 %d", value, unit.ValueData[0])
+	}
+
+	return outputPath, nil
+}
+
 // ── 副本(任务)完成次数 ──
 
 // QuestCountRow 是可编辑的单个副本次数行。Index 为其在完成次数向量中的位置。

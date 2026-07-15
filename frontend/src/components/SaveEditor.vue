@@ -1,11 +1,15 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
-import { FindSaveFiles, GetQuestsEditable, LoadSave, ApplyQuestCounts } from '../../wailsjs/go/main/App'
+import { FindSaveFiles, GetQuestsEditable, LoadSave, ApplyQuestCounts, ApplyCommendations } from '../../wailsjs/go/main/App'
+
+const MAX_COMMEND = 999999
 
 const slots = ref([])
 const quests = ref([])       // [{ index, questId, questName, questNameCn, clears }]
 const edits = reactive({})   // index -> string(输入框值)
 const total = ref(0)
+const commendations = ref(0) // 存档当前点赞数
+const commendEdit = ref('')  // 点赞数输入框值
 const loading = ref(false)
 const saving = ref(false)
 const savePath = ref('')
@@ -27,6 +31,23 @@ const changed = computed(() =>
     .map(q => ({ index: q.index, clears: parseInt(edits[q.index]) }))
 )
 
+// 有改动时返回新的点赞数，无改动/无效输入返回 null
+const commendChanged = computed(() => {
+  const v = commendEdit.value
+  if (v === undefined || v === '' || isNaN(parseInt(v))) return null
+  const n = parseInt(v)
+  return n === commendations.value ? null : n
+})
+
+const hasChanges = computed(() => changed.value.length > 0 || commendChanged.value !== null)
+
+const applyInfo = computed(() => {
+  const parts = []
+  if (changed.value.length) parts.push(changed.value.length + ' 个副本次数')
+  if (commendChanged.value !== null) parts.push('点赞数')
+  return parts.length ? '待写入：' + parts.join(' · ') : '修改后写入新存档（原存档不变）'
+})
+
 async function scanSaves() {
   slots.value = await FindSaveFiles() || []
 }
@@ -40,6 +61,8 @@ async function load(path) {
     const [summary, qs] = await Promise.all([LoadSave(path), GetQuestsEditable(path)])
     quests.value = qs || []
     total.value = summary?.questTotalClears || 0
+    commendations.value = summary?.commendations ?? 0
+    commendEdit.value = String(commendations.value)
     Object.keys(edits).forEach(k => delete edits[k])
     quests.value.forEach(q => { edits[q.index] = String(q.clears) })
   } catch (err) { error.value = String(err) } finally { loading.value = false }
@@ -47,12 +70,27 @@ async function load(path) {
 
 async function applyEdits() {
   if (!savePath.value) { error.value = '请先加载存档'; return }
-  const payload = changed.value
-  if (!payload.length) { error.value = '没有改动的副本次数'; return }
+  const questPayload = changed.value
+  const cv = commendChanged.value
+  if (!questPayload.length && cv === null) { error.value = '没有改动'; return }
+  if (cv !== null && (cv < 0 || cv > MAX_COMMEND)) {
+    error.value = '点赞数需在 0 ~ ' + MAX_COMMEND + ' 之间'; return
+  }
   saving.value = true
   error.value = ''
   try {
-    outPath.value = await ApplyQuestCounts(savePath.value, '', payload)
+    let out = ''
+    if (questPayload.length) {
+      out = await ApplyQuestCounts(savePath.value, '', questPayload)
+    }
+    if (cv !== null) {
+      // 上一步已生成新存档时在其基础上原地改；否则两步都基于原档，
+      // 后一步会覆盖掉前一步的改动。
+      out = out
+        ? await ApplyCommendations(out, out, cv)
+        : await ApplyCommendations(savePath.value, '', cv)
+    }
+    outPath.value = out
   } catch (err) { error.value = String(err) } finally { saving.value = false }
 }
 
@@ -73,28 +111,39 @@ scanSaves()
     <div v-if="error" class="err-box">{{ error }}</div>
     <div v-if="loading" class="loading">解析中...</div>
 
-    <div v-else-if="quests.length" class="quests">
-      <div class="head">
-        <span>{{ quests.length }} 个副本 · {{ total }} 次挑战</span>
-        <button class="refresh" @click="load(savePath)">刷新</button>
-        <button class="sort" @click="sortDesc = !sortDesc">{{ sortDesc ? '↓次数' : '↑默认' }}</button>
+    <template v-else-if="savePath">
+      <div class="commend-card">
+        <span class="commend-label">点赞数</span>
+        <span class="commend-hint">直接写入存档，不再需要 exe 补丁</span>
+        <span class="commend-current">{{ commendations }}</span>
+        <input v-model="commendEdit" type="number" min="0" :max="MAX_COMMEND"
+          class="edit-input" placeholder="修改为" />
       </div>
-      <div class="list">
-        <div v-for="q in sortedQuests" :key="q.index" class="row">
-          <span class="id">{{ q.questId }}</span>
-          <span class="name">{{ q.questNameCn || q.questName }}</span>
-          <span class="count" :class="{ hot: q.clears > 100 }">{{ q.clears }}</span>
-          <input v-model="edits[q.index]" type="number" min="0" class="edit-input" placeholder="次数" />
+
+      <div v-if="quests.length" class="quests">
+        <div class="head">
+          <span>{{ quests.length }} 个副本 · {{ total }} 次挑战</span>
+          <button class="refresh" @click="load(savePath)">刷新</button>
+          <button class="sort" @click="sortDesc = !sortDesc">{{ sortDesc ? '↓次数' : '↑默认' }}</button>
+        </div>
+        <div class="list">
+          <div v-for="q in sortedQuests" :key="q.index" class="row">
+            <span class="id">{{ q.questId }}</span>
+            <span class="name">{{ q.questNameCn || q.questName }}</span>
+            <span class="count" :class="{ hot: q.clears > 100 }">{{ q.clears }}</span>
+            <input v-model="edits[q.index]" type="number" min="0" class="edit-input" placeholder="次数" />
+          </div>
         </div>
       </div>
+
       <div class="apply-bar">
-        <span class="apply-info">{{ changed.length ? ('待写入 ' + changed.length + ' 个改动') : '修改右侧输入框后写入新存档（原存档不变）' }}</span>
-        <button class="btn-apply" @click="applyEdits" :disabled="saving || !changed.length">
+        <span class="apply-info">{{ applyInfo }}</span>
+        <button class="btn-apply" @click="applyEdits" :disabled="saving || !hasChanges">
           {{ saving ? '写入中...' : '应用写入到新存档' }}
         </button>
       </div>
       <div v-if="outPath" class="out-path">已保存：{{ outPath }}</div>
-    </div>
+    </template>
   </div>
 </template>
 
@@ -135,7 +184,12 @@ scanSaves()
 .edit-input { width:80px; box-sizing:border-box; padding:4px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.07); color:#fff; font-size:0.78rem; outline:none; flex-shrink:0; }
 .edit-input:focus { border-color:rgba(103,232,249,0.5); background:rgba(255,255,255,0.12); }
 .edit-input::-webkit-outer-spin-button, .edit-input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
-.apply-bar { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; border-top:1px solid rgba(255,255,255,0.05); background:rgba(255,255,255,0.03); }
+.commend-card { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); flex-shrink:0; }
+.commend-label { font-size:0.82rem; font-weight:600; color:rgba(255,255,255,0.6); }
+.commend-hint { flex:1; font-size:0.7rem; color:rgba(255,255,255,0.28); }
+.commend-current { font-size:0.8rem; font-weight:600; color:#fbbf24; font-family:'Courier New',monospace; }
+
+.apply-bar { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.03); flex-shrink:0; }
 .apply-info { font-size:0.73rem; color:rgba(255,255,255,0.4); }
 .btn-apply { padding:7px 16px; border-radius:8px; border:1px solid rgba(165,180,252,0.35); background:rgba(165,180,252,0.12); color:#a5b4fc; font-size:0.8rem; font-weight:600; cursor:pointer; white-space:nowrap; transition:background 0.2s; }
 .btn-apply:not(:disabled):hover { background:rgba(165,180,252,0.22); }
