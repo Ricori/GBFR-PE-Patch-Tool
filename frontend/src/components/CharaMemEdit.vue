@@ -9,36 +9,47 @@ const pid = ref(0)
 const list = ref([])        // [{ index, name, count }]
 const edits = ref({})       // index -> string(输入框值)
 const loading = ref(false)
+const phase = ref('')       // 当前阶段提示文案
+const errMsg = ref('')      // 常驻错误信息
 const savingIndex = ref(-1)
 
 async function connect() {
   loading.value = true
+  errMsg.value = ''
+  phase.value = '连接进程并扫描游戏内存中，首次可能需要 10~60 秒，请耐心等待...'
   try {
-    const info = await CharaAttach()
+    const info = await CharaAttach()   // 内部会全量扫描内存定位角色列表
     connected.value = !!info.connected
     pid.value = info.pid
     emit('status', '已连接游戏进程 PID ' + info.pid, 'success')
     await read()
   } catch (e) {
     connected.value = false
+    errMsg.value = String(e)
     emit('status', String(e), 'error')
   } finally {
     loading.value = false
+    phase.value = ''
   }
 }
 
 async function read() {
   loading.value = true
+  errMsg.value = ''
+  phase.value = '读取角色次数中...'
   try {
     const data = (await CharaGetAll()) || []
     list.value = data
     const m = {}
     data.forEach(c => { m[c.index] = String(c.count) })
     edits.value = m
+    if (!data.length) errMsg.value = '已连接，但未读取到角色数据（请确认已进入游戏存档，或游戏版本与偏移不匹配）'
   } catch (e) {
+    errMsg.value = String(e)
     emit('status', String(e), 'error')
   } finally {
     loading.value = false
+    phase.value = ''
   }
 }
 
@@ -86,7 +97,8 @@ async function disconnect() {
         </template>
       </div>
 
-      <div v-if="loading" class="empty">读取中...</div>
+      <div v-if="errMsg" class="err-box">{{ errMsg }}</div>
+      <div v-if="loading" class="empty">{{ phase || '读取中...' }}</div>
       <template v-else-if="connected && list.length">
         <div class="table">
           <div class="row row-head">
@@ -143,4 +155,5 @@ async function disconnect() {
 .btn-save:not(:disabled):hover { background:rgba(165,180,252,0.2); }
 .btn-save:disabled { opacity:0.4; cursor:not-allowed; }
 .empty { font-size:0.78rem; color:rgba(255,255,255,0.3); text-align:center; padding:12px 0; line-height:1.7; }
+.err-box { font-size:0.76rem; color:#f87171; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.25); border-radius:8px; padding:8px 12px; line-height:1.6; }
 </style>
