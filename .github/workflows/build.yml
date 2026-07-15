@@ -1,0 +1,42 @@
+name: build
+
+# GitHub Actions 云端编译 Wails 应用（Windows exe）
+# 触发后到仓库 Actions 页面下载 artifact 即可，无需本地环境。
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:   # 允许在 Actions 页手动点击运行
+
+jobs:
+  build:
+    runs-on: windows-latest   # 预装 WebView2，Wails 打包所需
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'   # 必须 amd64（runner 默认即 amd64）
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install frontend deps
+        run: npm install
+        working-directory: frontend
+
+      - name: Build (frontend + Go)
+        run: wails build
+
+      - name: Upload exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: GBFR-PE-Patch-Tool
+          path: build/bin/*.exe
