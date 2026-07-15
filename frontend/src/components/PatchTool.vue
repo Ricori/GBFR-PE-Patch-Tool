@@ -7,7 +7,6 @@ import SigilMemoryGenerator from './SigilMemoryGenerator.vue'
 import WrightstoneGenerator from './WrightstoneGenerator.vue'
 import SaveEditor from './SaveEditor.vue'
 import CharaStats from './CharaStats.vue'
-import CharaMemEdit from './CharaMemEdit.vue'
 import MiscTools from './MiscTools.vue'
 import MonsterEnhance from './MonsterEnhance.vue'
 import OverLimit from './OverLimit.vue'
@@ -166,10 +165,7 @@ function showStatus(msg, type) {
         祝福生成
       </button>
       <button class="tab-btn" :class="{ active: activeTab === 'chara' }" @click="activeTab = 'chara'">
-        角色次数统计
-      </button>
-      <button class="tab-btn" :class="{ active: activeTab === 'charaMem' }" @click="activeTab = 'charaMem'">
-        角色次数修改
+        角色次数
       </button>
       <button class="tab-btn" :class="{ active: activeTab === 'save' }" @click="activeTab = 'save'">
         副本次数
@@ -272,10 +268,6 @@ function showStatus(msg, type) {
 
     <main v-else-if="activeTab === 'chara'" class="container" style="--wails-draggable:no-drag">
       <CharaStats @status="showStatus" />
-    </main>
-
-    <main v-else-if="activeTab === 'charaMem'" class="container" style="--wails-draggable:no-drag">
-      <CharaMemEdit @status="showStatus" />
     </main>
 
     <main v-else-if="activeTab === 'save'" class="container" style="--wails-draggable:no-drag">
