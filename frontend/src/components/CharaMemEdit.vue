@@ -13,16 +13,34 @@ const phase = ref('')       // 当前阶段提示文案
 const errMsg = ref('')      // 常驻错误信息
 const savingIndex = ref(-1)
 
+function fillList(data) {
+  list.value = data
+  const m = {}
+  data.forEach(c => { m[c.index] = String(c.count) })
+  edits.value = m
+  if (!data.length) errMsg.value = '已连接，但未读取到角色数据（请确认已进入游戏存档）'
+}
+
+// 连接：优先复用已有进程连接（例如已在「杂项」里连接过），
+// 只有在后端尚未连接时才 CharaAttach，避免拆掉正常连接后重新全量扫描内存。
 async function connect() {
   loading.value = true
   errMsg.value = ''
-  phase.value = '连接进程并扫描游戏内存中，首次可能需要 10~60 秒，请耐心等待...'
+  phase.value = '读取角色次数中...'
   try {
-    const info = await CharaAttach()   // 内部会全量扫描内存定位角色列表
-    connected.value = !!info.connected
-    pid.value = info.pid
-    emit('status', '已连接游戏进程 PID ' + info.pid, 'success')
-    await read()
+    let data
+    try {
+      data = (await CharaGetAll()) || []       // 复用已有连接，秒读
+    } catch (e1) {
+      // 后端未连接 → 附加进程（首次会扫描内存定位列表）后再读
+      phase.value = '连接进程并扫描游戏内存，首次可能需要 10~60 秒，请耐心等待...'
+      const info = await CharaAttach()
+      pid.value = info.pid
+      data = (await CharaGetAll()) || []
+    }
+    connected.value = true
+    fillList(data)
+    emit('status', pid.value ? ('已连接 PID ' + pid.value) : '已读取角色次数', 'success')
   } catch (e) {
     connected.value = false
     errMsg.value = String(e)
@@ -33,17 +51,13 @@ async function connect() {
   }
 }
 
+// 刷新：始终复用当前连接，不重新附加
 async function read() {
   loading.value = true
   errMsg.value = ''
   phase.value = '读取角色次数中...'
   try {
-    const data = (await CharaGetAll()) || []
-    list.value = data
-    const m = {}
-    data.forEach(c => { m[c.index] = String(c.count) })
-    edits.value = m
-    if (!data.length) errMsg.value = '已连接，但未读取到角色数据（请确认已进入游戏存档，或游戏版本与偏移不匹配）'
+    fillList((await CharaGetAll()) || [])
   } catch (e) {
     errMsg.value = String(e)
     emit('status', String(e), 'error')
@@ -91,7 +105,7 @@ async function disconnect() {
           {{ loading ? '连接中...' : '连接游戏进程' }}
         </button>
         <template v-else>
-          <span class="pid-badge">已连接 · PID {{ pid }}</span>
+          <span class="pid-badge">{{ pid ? ('已连接 · PID ' + pid) : '已连接' }}</span>
           <button class="btn-refresh" @click="read" :disabled="loading">刷新次数</button>
           <button class="btn-detach" @click="disconnect">断开</button>
         </template>
